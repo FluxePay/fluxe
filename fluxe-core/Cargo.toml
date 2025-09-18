@@ -1,0 +1,29 @@
+[package]
+name = "fluxe-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+ark-bls12-381 = { workspace = true }
+ark-crypto-primitives = { workspace = true }
+ark-ec = { workspace = true }
+ark-ed-on-bls12-381 = { workspace = true }
+ark-ff = { workspace = true }
+ark-groth16 = { workspace = true }
+ark-r1cs-std = { workspace = true }
+ark-relations = { workspace = true }
+ark-serialize = { workspace = true }
+ark-snark = { workspace = true }
+ark-std = { workspace = true }
+blake2 = { workspace = true }
+chacha20poly1305 = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = ["parallel"]
+parallel = ["ark-ff/parallel", "ark-ec/parallel"]

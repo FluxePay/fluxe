@@ -1,0 +1,18 @@
+[package]
+name = "fluxe-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+fluxe-core = { path = "../fluxe-core" }
+fluxe-circuits = { path = "../fluxe-circuits" }
+ark-bls12-381 = { workspace = true }
+ark-groth16 = { workspace = true }
+ark-serialize = { workspace = true }
+hex = "0.4"
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
