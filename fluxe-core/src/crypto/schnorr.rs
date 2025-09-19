@@ -1,5 +1,5 @@
 use ark_bls12_381::{Fr as F, Fq, G1Projective as G1, G1Affine};
-use ark_ec::{CurveGroup, Group};
+use ark_ec::{CurveGroup, PrimeGroup};
 use ark_ff::UniformRand;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::Rng;
@@ -45,7 +45,7 @@ impl SchnorrSecretKey {
 
     /// Derive public key from secret key
     pub fn public_key(&self) -> SchnorrPublicKey {
-        let generator = G1::generator();
+        let generator = <G1 as PrimeGroup>::generator();
         SchnorrPublicKey {
             point: (generator * self.scalar).into_affine().into(),
         }
@@ -55,7 +55,7 @@ impl SchnorrSecretKey {
     pub fn sign<R: Rng>(&self, message: &[F], rng: &mut R) -> SchnorrSignature {
         // Generate random nonce
         let r = F::rand(rng);
-        let generator = G1::generator();
+        let generator = <G1 as PrimeGroup>::generator();
         let r_point: G1 = generator * r;
         
         // Compute challenge c = H(R || pk || msg)
@@ -88,7 +88,7 @@ impl SchnorrSecretKey {
 impl SchnorrPublicKey {
     /// Verify a signature on a message
     pub fn verify(&self, message: &[F], signature: &SchnorrSignature) -> bool {
-        let generator = G1::generator();
+        let generator = <G1 as PrimeGroup>::generator();
         
         // Compute challenge c = H(R || pk || msg)
         let mut challenge_input = vec![];

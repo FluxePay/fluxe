@@ -1,5 +1,5 @@
 use ark_bls12_381::{Fr as F, G1Affine, G1Projective};
-use ark_ec::{AffineRepr, CurveGroup};
+use ark_ec::{AffineRepr, CurveGroup, PrimeGroup};
 use ark_ff::UniformRand;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{rand::Rng, vec::Vec};
@@ -48,7 +48,7 @@ impl PedersenParams {
                 // multiply generator by the scalar derived from hash
                 // This is deterministic and ensures point is in correct subgroup
                 let scalar = x;
-                let generator = G1Affine::generator();
+                let generator = <G1Projective as PrimeGroup>::generator().into_affine();
                 let point = (G1Projective::from(generator) * scalar).into_affine();
                 
                 if !point.is_zero() {
@@ -62,7 +62,7 @@ impl PedersenParams {
                     
                     if let Some(mix_scalar) = F::from_random_bytes(&mix_hash[..31]) {
                         let final_point = (G1Projective::from(point) * mix_scalar).into_affine();
-                        if !final_point.is_zero() && final_point != G1Affine::generator() {
+                        if !final_point.is_zero() && final_point != <G1Projective as PrimeGroup>::generator().into_affine() {
                             return final_point;
                         }
                     }
@@ -89,7 +89,7 @@ impl PedersenParams {
         // SECURITY: We must ensure g and h have no known discrete log relationship
         
         // Use the standard generator as g (common practice)
-        let g = G1Affine::generator();
+        let g = <G1Projective as PrimeGroup>::generator().into_affine();
         
         // Generate h using try-and-increment hash-to-curve
         // This ensures no known relationship between g and h

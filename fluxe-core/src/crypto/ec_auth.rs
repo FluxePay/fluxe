@@ -1,5 +1,5 @@
 use ark_bls12_381::Fr as F;
-use ark_ec::{CurveGroup, Group};
+use ark_ec::{CurveGroup, PrimeGroup};
 use ark_ed_on_bls12_381::EdwardsProjective as Jubjub;
 use ark_ff::{BigInteger, PrimeField};
 
@@ -9,7 +9,7 @@ use super::poseidon_hash;
 /// Returns (pk_x, pk_y) as field elements in Fr
 pub fn compute_ec_public_key(sk: F) -> (F, F) {
     // Compute pk = sk * G on Jubjub curve
-    let g = Jubjub::generator();
+    let g = <Jubjub as PrimeGroup>::generator();
     
     // Scalar multiplication
     let sk_bigint = sk.into_bigint();
