@@ -180,34 +180,73 @@ impl PoolPolicyGadget {
         Ok(())
     }
     
-    /// Check if pool ID is in an allowed list (simplified bitmap check)
+    /// Check if pool ID is in an allowed list using proper bitmap bit extraction
     fn check_pool_in_list(
-        cs: ConstraintSystemRef<F>,
+        _cs: ConstraintSystemRef<F>,
         pool_id: &FpVar<F>,
         allowed_bitmap: &FpVar<F>,
     ) -> Result<(), SynthesisError> {
-        // Simplified: just check pool_id is non-zero and bitmap is non-zero
-        // Real implementation would do proper bitmap indexing
+        // Convert pool_id to bits to use as index (take lower 8 bits for 256 pools)
+        let pool_id_bits = pool_id.to_bits_le()?;
+        let index_bits = &pool_id_bits[..8.min(pool_id_bits.len())];
         
-        let pool_nonzero = pool_id.is_neq(&FpVar::zero())?;
-        let bitmap_nonzero = allowed_bitmap.is_neq(&FpVar::zero())?;
-        let both_nonzero = pool_nonzero.and(&bitmap_nonzero)?;
-        both_nonzero.enforce_equal(&Boolean::TRUE)?;
+        // Convert bitmap to bits
+        let bitmap_bits = allowed_bitmap.to_bits_le()?;
+        
+        // Select the bit at pool_id index from bitmap
+        // We need to handle this carefully for constant circuit size
+        let mut is_allowed = Boolean::FALSE;
+        
+        for (i, bit) in bitmap_bits.iter().enumerate().take(256) {
+            // Check if current position matches pool_id
+            let mut index_matches = Boolean::TRUE;
+            for (j, index_bit) in index_bits.iter().enumerate() {
+                let expected_bit = Boolean::constant((i >> j) & 1 == 1);
+                let bit_matches = index_bit.is_eq(&expected_bit)?;
+                index_matches = index_matches.and(&bit_matches)?;
+            }
+            
+            // If index matches, select this bit
+            is_allowed = index_matches.select(bit, &is_allowed)?;
+        }
+        
+        // Enforce that pool is in the allowed list
+        is_allowed.enforce_equal(&Boolean::TRUE)?;
         
         Ok(())
     }
     
-    /// Check if pool ID is NOT in a denied list
+    /// Check if pool ID is NOT in a denied list using proper bitmap bit extraction
     fn check_pool_not_in_list(
-        cs: ConstraintSystemRef<F>,
+        _cs: ConstraintSystemRef<F>,
         pool_id: &FpVar<F>,
         denied_bitmap: &FpVar<F>,
     ) -> Result<(), SynthesisError> {
-        // Simplified: if denied bitmap is zero, then nothing is denied
-        // Real implementation would check specific bit for pool_id
+        // Convert pool_id to bits to use as index (take lower 8 bits for 256 pools)
+        let pool_id_bits = pool_id.to_bits_le()?;
+        let index_bits = &pool_id_bits[..8.min(pool_id_bits.len())];
         
-        let bitmap_is_zero = denied_bitmap.is_eq(&FpVar::zero())?;
-        bitmap_is_zero.enforce_equal(&Boolean::TRUE)?;
+        // Convert bitmap to bits
+        let bitmap_bits = denied_bitmap.to_bits_le()?;
+        
+        // Select the bit at pool_id index from bitmap
+        let mut is_denied = Boolean::FALSE;
+        
+        for (i, bit) in bitmap_bits.iter().enumerate().take(256) {
+            // Check if current position matches pool_id
+            let mut index_matches = Boolean::TRUE;
+            for (j, index_bit) in index_bits.iter().enumerate() {
+                let expected_bit = Boolean::constant((i >> j) & 1 == 1);
+                let bit_matches = index_bit.is_eq(&expected_bit)?;
+                index_matches = index_matches.and(&bit_matches)?;
+            }
+            
+            // If index matches, select this bit
+            is_denied = index_matches.select(bit, &is_denied)?;
+        }
+        
+        // Enforce that pool is NOT in the denied list
+        is_denied.enforce_equal(&Boolean::FALSE)?;
         
         Ok(())
     }

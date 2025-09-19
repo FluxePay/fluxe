@@ -100,17 +100,22 @@ pub struct MerkleTreeGadget;
 
 impl MerkleTreeGadget {
     /// Verify membership of a leaf in a tree
+    /// DEPRECATED: This simplified helper assumes left ordering and ignores index bits.
+    /// Use MerklePathVar::enforce_valid for proper membership verification.
+    #[deprecated(note = "Use MerklePathVar::enforce_valid for proper index-aware verification")]
     pub fn verify_membership(
         _cs: ConstraintSystemRef<F>,
         leaf: &FpVar<F>,
         path: &[FpVar<F>],
         root: &FpVar<F>,
     ) -> Result<(), SynthesisError> {
-        // Compute root from path (simplified)
+        // WARNING: This simplified version assumes left ordering
+        // and does not use index bits to determine sibling positions.
+        // This is UNSAFE for production use.
         let mut current = leaf.clone();
         
         for sibling in path {
-            // Assume left ordering for simplicity
+            // UNSAFE: Always assumes current is on the left
             current = poseidon_hash_zk(&[current, sibling.clone()])?;
         }
         
