@@ -1,7 +1,6 @@
 /// Simple Pedersen commitment implementation that compiles and works
 /// This uses a simplified approach that avoids the complex EC operations
 use ark_bls12_381::Fr as F;
-use ark_ff::{Field, PrimeField, UniformRand};
 use ark_r1cs_std::{
     alloc::AllocVar,
     boolean::Boolean,
@@ -108,7 +107,7 @@ impl ValueCommitmentVar {
         
         // Prove value is in range
         use crate::gadgets::range_proof::RangeProofGadget;
-        RangeProofGadget::prove_range(cs, value, bits)?;
+        RangeProofGadget::prove_range_bits(cs, value, bits)?;
         
         Ok(commitment)
     }
@@ -126,7 +125,7 @@ impl ValueCommitmentVar {
         
         // Verify range
         use crate::gadgets::range_proof::RangeProofGadget;
-        RangeProofGadget::prove_range(cs, value, bits)?;
+        RangeProofGadget::prove_range_bits(cs, value, bits)?;
         
         Ok(opening_valid)
     }
@@ -135,6 +134,7 @@ impl ValueCommitmentVar {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ark_ff::UniformRand;
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::test_rng;
     

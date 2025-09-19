@@ -5,7 +5,6 @@ use ark_r1cs_std::{
     prelude::*,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-use ark_ff::BigInteger;
 
 /// Comparison gadget for field elements
 pub struct ComparisonGadget;
@@ -14,7 +13,7 @@ impl ComparisonGadget {
     /// Check if a < b for field elements
     /// Uses bit decomposition to perform lexicographic comparison
     pub fn is_less_than(
-        cs: ConstraintSystemRef<F>,
+        _cs: ConstraintSystemRef<F>,
         a: &FpVar<F>,
         b: &FpVar<F>,
     ) -> Result<Boolean<F>, SynthesisError> {

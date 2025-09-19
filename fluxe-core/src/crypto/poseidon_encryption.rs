@@ -1,7 +1,5 @@
 use ark_bls12_381::Fr as F;
-use ark_ff::{Field, PrimeField, UniformRand};
-use ark_crypto_primitives::sponge::{Absorb, CryptographicSponge};
-use ark_crypto_primitives::sponge::poseidon::{PoseidonConfig, PoseidonSponge};
+use ark_ff::UniformRand;
 use crate::crypto::poseidon_hash;
 
 /// Poseidon-based symmetric encryption for field elements

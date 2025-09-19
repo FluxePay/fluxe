@@ -1,7 +1,6 @@
 use crate::crypto::{pedersen::PedersenCommitment, poseidon_hash, domain_sep_to_field, DOM_NOTE, DOM_NF};
 use crate::types::*;
 use ark_bls12_381::Fr as F;
-use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 // Using ark_serialize for field element serialization
 

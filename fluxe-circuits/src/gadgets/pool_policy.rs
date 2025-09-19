@@ -3,7 +3,7 @@ use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
-use crate::gadgets::{merkle::{MerkleTreeGadget, MerklePathVar}, poseidon::poseidon_hash_zk, range_proof::RangeProofGadget};
+use crate::gadgets::{merkle::MerklePathVar, poseidon::poseidon_hash_zk, range_proof::RangeProofGadget};
 
 /// Pool policy enforcement gadget
 /// Handles inbound/outbound allowlists, denylists, and transfer limits
@@ -54,7 +54,7 @@ impl PoolPolicyGadget {
     
     /// Verify a single pool policy membership in POOL_RULES_ROOT
     pub fn verify_pool_policy_membership(
-        cs: ConstraintSystemRef<F>,
+        _cs: ConstraintSystemRef<F>,
         pool_policy: &PoolPolicyVar,
         policy_path: &MerklePathVar,
         pool_rules_root: &FpVar<F>,
@@ -105,13 +105,13 @@ impl PoolPolicyGadget {
         // Check against outbound allowlist/denylist
         // This is simplified - real implementation would check bitmap or list membership
         
-        let has_outbound_allowlist = policy.flags.has_outbound_allowlist()?;
+        let _has_outbound_allowlist = policy.flags.has_outbound_allowlist()?;
         // Conditionally check: if has_allowlist then must be in list
         // For simplicity, we always check but only enforce if flag is set
         // This maintains constant circuit size
         Self::check_pool_in_list(cs.clone(), dest_pool_id, &policy.outbound_allow)?;
         
-        let has_outbound_denylist = policy.flags.has_outbound_denylist()?;
+        let _has_outbound_denylist = policy.flags.has_outbound_denylist()?;
         // Must NOT be in denylist (always check for constant circuit)
         Self::check_pool_not_in_list(cs, dest_pool_id, &policy.outbound_deny)?;
         
@@ -124,11 +124,11 @@ impl PoolPolicyGadget {
         source_pool_id: &FpVar<F>,
         policy: &PoolPolicyVar,
     ) -> Result<(), SynthesisError> {
-        let has_inbound_allowlist = policy.flags.has_inbound_allowlist()?;
+        let _has_inbound_allowlist = policy.flags.has_inbound_allowlist()?;
         // Always check for constant circuit size
         Self::check_pool_in_list(cs.clone(), source_pool_id, &policy.inbound_allow)?;
         
-        let has_inbound_denylist = policy.flags.has_inbound_denylist()?;
+        let _has_inbound_denylist = policy.flags.has_inbound_denylist()?;
         Self::check_pool_not_in_list(cs, source_pool_id, &policy.inbound_deny)?;
         
         Ok(())
@@ -158,7 +158,7 @@ impl PoolPolicyGadget {
     
     /// Check time-based limits (daily, monthly, etc.)
     fn check_time_limits(
-        cs: ConstraintSystemRef<F>,
+        _cs: ConstraintSystemRef<F>,
         amount: &FpVar<F>,
         timestamp: &FpVar<F>,
         policy: &PoolPolicyVar,
@@ -428,8 +428,8 @@ impl PoolPolicyUtils {
 mod tests {
     use super::*;
     use ark_relations::r1cs::ConstraintSystem;
-    use ark_ff::UniformRand;
-    use rand::thread_rng;
+    
+    
 
     #[test]
     fn test_pool_policy_hash() {

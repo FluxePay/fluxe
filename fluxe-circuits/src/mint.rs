@@ -6,7 +6,7 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 use fluxe_core::{
     crypto::poseidon_hash,
     data_structures::{IngressReceipt, Note},
-    merkle::{IncrementalTree, MerklePath, AppendWitness},
+    merkle::{IncrementalTree, AppendWitness},
     types::*,
 };
 
@@ -88,7 +88,7 @@ impl MintCircuit {
         let commitments: Vec<F> = notes_out.iter().map(|n| n.commitment()).collect();
         
         // For each note, get the append witness before appending
-        for (i, cm) in commitments.iter().enumerate() {
+        for cm in commitments.iter() {
             let leaf_index = cmt_tree.num_leaves();
             let pre_siblings = cmt_tree.get_siblings_for_index(leaf_index);
             cmt_append_witnesses.push(AppendWitness::new(
@@ -201,7 +201,7 @@ impl ConstraintSynthesizer<F> for MintCircuit {
         cm_list_var.enforce_equal(&cm_out_list_var)?;
         
         // Constraint 5: Verify range proofs for values
-        for (_i, note_var) in notes_out_vars.iter().enumerate() {
+        for note_var in notes_out_vars.iter() {
             // Ensure value fits in 64 bits using secure bit decomposition
             use crate::gadgets::range_proof::RangeProofGadget;
             RangeProofGadget::prove_range_bits(cs.clone(), &note_var.value, 64)?;

@@ -2,7 +2,7 @@ use ark_bls12_381::Fr as F;
 use ark_r1cs_std::{fields::fp::FpVar, boolean::Boolean, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use super::poseidon::poseidon_hash_zk;
-use fluxe_core::merkle::{TreeParams, AppendWitness};
+use fluxe_core::merkle::AppendWitness;
 
 /// Append proof for an Incremental Merkle Tree.
 /// 

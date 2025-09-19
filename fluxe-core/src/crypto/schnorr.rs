@@ -1,5 +1,5 @@
 use ark_bls12_381::{Fr as F, Fq, G1Projective as G1, G1Affine};
-use ark_ec::{AffineRepr, CurveGroup, Group};
+use ark_ec::{CurveGroup, Group};
 use ark_ff::UniformRand;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::Rng;
@@ -56,7 +56,7 @@ impl SchnorrSecretKey {
         // Generate random nonce
         let r = F::rand(rng);
         let generator = G1::generator();
-        let r_point: G1 = (generator * r).into();
+        let r_point: G1 = generator * r;
         
         // Compute challenge c = H(R || pk || msg)
         let pk_point = self.public_key().point;
