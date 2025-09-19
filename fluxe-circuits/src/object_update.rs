@@ -199,6 +199,14 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
                 || Ok(callback_entry.clone()),
             )?;
             
+            // Update callback hash chain (remove processed callback)
+            let callback_hash = callback_var.hash()?;
+            let new_cb_hash = poseidon_hash_zk(&[
+                obj_old_var.cb_head_hash.clone(),
+                callback_hash,
+            ])?;
+            new_cb_hash.enforce_equal(&obj_new_var.cb_head_hash)?;
+            
             // If invocation exists, verify it
             if let Some(ref invocation) = self.callback_invocation {
                 let invocation_var = CallbackInvocationVar::new_witness(
@@ -289,14 +297,6 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
                 )?;
                 is_expired.enforce_equal(&Boolean::TRUE)?;
             }
-            
-            // Update callback hash chain (remove processed callback)
-            let callback_hash = callback_var.hash()?;
-            let new_cb_hash = poseidon_hash_zk(&[
-                obj_old_var.cb_head_hash.clone(),
-                callback_hash,
-            ])?;
-            new_cb_hash.enforce_equal(&obj_new_var.cb_head_hash)?;
         } else {
             // No callback processing - hash chain unchanged
             obj_old_var.cb_head_hash.enforce_equal(&obj_new_var.cb_head_hash)?;
