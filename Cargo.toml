@@ -8,17 +8,17 @@ edition = "2021"
 authors = ["Fluxe Team"]
 
 [workspace.dependencies]
-ark-bls12-381 = "0.4.0"
-ark-crypto-primitives = { version = "0.4.0", default-features = true, features = ["crh", "r1cs", "merkle_tree"] }
-ark-ec = "0.4.2"
-ark-ed-on-bls12-381 = { version = "0.4.0", features = ["r1cs"] }
-ark-ff = "0.4.2"
-ark-groth16 = "0.4.0"
-ark-r1cs-std = "0.4.0"
-ark-relations = "0.4.0"
-ark-serialize = "0.4.2"
-ark-snark = "0.4.0"
-ark-std = "0.4.0"
+ark-bls12-381 = "0.5.0"
+ark-crypto-primitives = { version = "0.5.0", default-features = true, features = ["crh", "r1cs", "merkle_tree"] }
+ark-ec = "0.5.0"
+ark-ed-on-bls12-381 = { version = "0.5.0", features = ["r1cs"] }
+ark-ff = "0.5.0"
+ark-groth16 = "0.5.0"
+ark-r1cs-std = "0.5.0"
+ark-relations = "0.5.0"
+ark-serialize = "0.5.0"
+ark-snark = "0.5.0"
+ark-std = "0.5.0"
 blake2 = "0.10"
 chacha20poly1305 = "0.10"
 hex = "0.4.3"
