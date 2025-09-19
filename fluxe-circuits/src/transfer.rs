@@ -375,25 +375,15 @@ impl ConstraintSynthesizer<F> for TransferCircuit {
         // Constraint 2b: EC-based owner authentication for input notes
         // SECURITY CRITICAL: Verify each input note can only be spent by its owner
         for (i, note_var) in notes_in_var.iter().enumerate() {
-            if i < self.owner_sks.len() && i < self.owner_pks.len() {
+            if i < self.owner_sks.len() {
                 let owner_sk_var = FpVar::new_witness(cs.clone(), || Ok(self.owner_sks[i]))?;
-                let owner_pk_x_var = FpVar::new_witness(cs.clone(), || Ok(self.owner_pks[i].0))?;
-                let owner_pk_y_var = FpVar::new_witness(cs.clone(), || Ok(self.owner_pks[i].1))?;
                 
-                // Create authentication witness for EC-based verification
-                use crate::gadgets::auth::{AuthGadget, PublicKeyVar};
-                let public_key = PublicKeyVar {
-                    x: owner_pk_x_var,
-                    y: owner_pk_y_var,
-                };
+                // Derive the public key from the secret key (returns FqVar)
+                use crate::gadgets::auth::AuthGadget;
+                let (derived_pk_x_fq, derived_pk_y_fq) = AuthGadget::scalar_mult_generator(cs.clone(), &owner_sk_var)?;
                 
-                // Verify that the public key derives from the secret key
-                let (derived_pk_x, derived_pk_y) = AuthGadget::scalar_mult_generator(cs.clone(), &owner_sk_var)?;
-                public_key.x.enforce_equal(&derived_pk_x)?;
-                public_key.y.enforce_equal(&derived_pk_y)?;
-                
-                // Compute owner address from public key: addr = H(pk_x, pk_y)
-                let computed_owner_addr = AuthGadget::compute_owner_address(cs.clone(), &public_key.x, &public_key.y)?;
+                // Compute owner address from the derived public key: addr = H(pk_x, pk_y)
+                let computed_owner_addr = AuthGadget::compute_owner_address_from_fq(cs.clone(), &derived_pk_x_fq, &derived_pk_y_fq)?;
                 
                 // Enforce that computed address matches note's owner
                 computed_owner_addr.enforce_equal(&note_var.owner_addr)?;
@@ -455,7 +445,7 @@ impl ConstraintSynthesizer<F> for TransferCircuit {
                     let nm_proof_var = RangePathVar::new_witness(cs.clone(), || Ok(nm_proof.clone()))?;
                     
                     // Verify the proof target matches our nullifier
-                    nm_proof_var.target.enforce_equal(&nf_var)?;
+                    nm_proof_var.target.enforce_equal(nf_var)?;
                     
                     // Verify the non-membership proof is valid
                     nm_proof_var.enforce_valid(&nft_root_old_var)?;
@@ -655,7 +645,6 @@ impl ConstraintSynthesizer<F> for TransferCircuit {
         // SECURITY CRITICAL: Verify proper tree transitions
         // Use ImtAppendProofVar for CMT updates and SimtInsertVar for NFT updates
         use crate::gadgets::merkle_append::ImtAppendProofVar;
-        use crate::gadgets::sorted_insert::SimtInsertVar;
         
         // For CMT_ROOT (append-only I-IMT): Require proper append witnesses
         if self.cmt_appends_out.is_empty() && !cm_vars.is_empty() {

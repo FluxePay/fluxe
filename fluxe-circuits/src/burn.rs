@@ -163,23 +163,13 @@ impl ConstraintSynthesizer<F> for BurnCircuit {
         // Constraint 2b: Verify EC-based owner authentication
         // SECURITY CRITICAL: Must verify sk corresponds to note owner
         let owner_sk_var = FpVar::new_witness(cs.clone(), || Ok(self.owner_sk))?;
-        let owner_pk_x_var = FpVar::new_witness(cs.clone(), || Ok(self.owner_pk_x))?;
-        let owner_pk_y_var = FpVar::new_witness(cs.clone(), || Ok(self.owner_pk_y))?;
         
-        // Create authentication witness for EC-based verification
-        use crate::gadgets::auth::{AuthGadget, PublicKeyVar};
-        let public_key = PublicKeyVar {
-            x: owner_pk_x_var,
-            y: owner_pk_y_var,
-        };
+        // Derive the public key from the secret key (returns FqVar)
+        use crate::gadgets::auth::AuthGadget;
+        let (derived_pk_x_fq, derived_pk_y_fq) = AuthGadget::scalar_mult_generator(cs.clone(), &owner_sk_var)?;
         
-        // Verify that the public key derives from the secret key
-        let (derived_pk_x, derived_pk_y) = AuthGadget::scalar_mult_generator(cs.clone(), &owner_sk_var)?;
-        public_key.x.enforce_equal(&derived_pk_x)?;
-        public_key.y.enforce_equal(&derived_pk_y)?;
-        
-        // Compute owner address from public key: addr = H(pk_x, pk_y)
-        let computed_owner_addr = AuthGadget::compute_owner_address(cs.clone(), &public_key.x, &public_key.y)?;
+        // Compute owner address from the derived public key: addr = H(pk_x, pk_y)
+        let computed_owner_addr = AuthGadget::compute_owner_address_from_fq(cs.clone(), &derived_pk_x_fq, &derived_pk_y_fq)?;
         
         // Enforce that computed address matches note's owner
         computed_owner_addr.enforce_equal(&note_in_var.owner_addr)?;

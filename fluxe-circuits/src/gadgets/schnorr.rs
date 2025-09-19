@@ -33,20 +33,6 @@ impl SchnorrGadget {
         Boolean::le_bits_to_fp_var(&bits)
     }
     
-    /// DEPRECATED: Use verify_with_fq_coords. The Fr-coordinates variant was unsound and is removed.
-    #[deprecated(note = "Use verify_with_fq_coords. The Fr-coordinates variant was unsound and is removed.")]
-    pub fn verify(
-        _cs: ConstraintSystemRef<F>,
-        _pk_x: &FpVar<F>,
-        _pk_y: &FpVar<F>,
-        _r_x: &FpVar<F>,
-        _r_y: &FpVar<F>,
-        _s: &FpVar<F>,
-        _msg_fields: &[FpVar<F>],
-    ) -> Result<Boolean<F>, SynthesisError> {
-        Err(SynthesisError::Unsatisfiable)
-    }
-    
     /// Verify Schnorr signature with Jubjub curve point coordinates
     /// Takes coordinates as FqVar to ensure proper curve membership
     pub fn verify_with_fq_coords(

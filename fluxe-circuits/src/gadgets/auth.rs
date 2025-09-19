@@ -2,9 +2,7 @@ use ark_bls12_381::Fr as F;
 use ark_ec::Group;
 use ark_ed_on_bls12_381::{
     constraints::{EdwardsVar as JubjubVar, FqVar},
-    EdwardsAffine,
     EdwardsProjective as Jubjub,
-    Fq as JubjubBase,
 };
 use ark_r1cs_std::{
     alloc::AllocVar,
@@ -45,29 +43,13 @@ impl AuthGadget {
         // Derive public key from secret key: pk = sk * G
         let (pk_x_fq, pk_y_fq) = Self::scalar_mult_generator(cs.clone(), owner_sk)?;
         
-        // Convert Fq coordinates to Fr for hashing
-        let pk_x = Self::fq_to_fr_constrained(cs.clone(), &pk_x_fq)?;
-        let pk_y = Self::fq_to_fr_constrained(cs.clone(), &pk_y_fq)?;
-        
         // Compute owner address: addr = H(pk_x, pk_y)
-        let computed_addr = Self::compute_owner_address(cs, &pk_x, &pk_y)?;
+        let computed_addr = Self::compute_owner_address_from_fq(cs, &pk_x_fq, &pk_y_fq)?;
         
         // Enforce that computed address matches expected
         computed_addr.enforce_equal(expected_owner_addr)?;
         
         Ok(())
-    }
-    
-    /// Compute owner address from public key coordinates (Fr)
-    /// DEPRECATED: Use compute_owner_address_from_fq for proper constrained conversion
-    #[deprecated(note = "Use compute_owner_address_from_fq for constrained Fq to Fr conversion")]
-    pub fn compute_owner_address(
-        _cs: ConstraintSystemRef<F>,
-        pk_x: &FpVar<F>,
-        pk_y: &FpVar<F>,
-    ) -> Result<FpVar<F>, SynthesisError> {
-        // owner_addr = Poseidon(pk_x, pk_y)
-        poseidon_hash_zk(&[pk_x.clone(), pk_y.clone()])
     }
     
     /// Compute owner address from Fq coordinates
@@ -91,7 +73,6 @@ impl AuthGadget {
         let bits = scalar.to_bits_le()?;
 
         // Constant generator
-        use ark_ec::CurveGroup;
         let g = Jubjub::generator();
         let g_var = JubjubVar::new_constant(cs.clone(), g)?;
 
@@ -139,7 +120,7 @@ impl AuthGadget {
     /// Alternative authentication using Ethereum-style addresses
     /// Supports both Poseidon-based and Ethereum ECDSA addresses
     pub fn verify_ethereum_authentication(
-        cs: ConstraintSystemRef<F>,
+        _cs: ConstraintSystemRef<F>,
         owner_sk: &FpVar<F>,
         expected_eth_addr: &FpVar<F>,
     ) -> Result<(), SynthesisError> {
@@ -193,54 +174,13 @@ impl AuthGadget {
     }
 }
 
-/// Public key variable for circuit operations
-#[derive(Clone)]
-pub struct PublicKeyVar {
-    pub x: FpVar<F>,
-    pub y: FpVar<F>,
-}
-
-impl PublicKeyVar {
-    /// Create new public key variable as witness
-    pub fn new_witness(
-        cs: ConstraintSystemRef<F>,
-        pk_x: F,
-        pk_y: F,
-    ) -> Result<Self, SynthesisError> {
-        Ok(Self {
-            x: FpVar::new_witness(cs.clone(), || Ok(pk_x))?,
-            y: FpVar::new_witness(cs, || Ok(pk_y))?,
-        })
-    }
-    
-    /// Create new public key variable as public input
-    pub fn new_input(
-        cs: ConstraintSystemRef<F>,
-        pk_x: F,
-        pk_y: F,
-    ) -> Result<Self, SynthesisError> {
-        Ok(Self {
-            x: FpVar::new_input(cs.clone(), || Ok(pk_x))?,
-            y: FpVar::new_input(cs, || Ok(pk_y))?,
-        })
-    }
-    
-    /// Compute owner address from this public key
-    pub fn to_owner_address(&self, cs: ConstraintSystemRef<F>) -> Result<FpVar<F>, SynthesisError> {
-        AuthGadget::compute_owner_address(cs, &self.x, &self.y)
-    }
-    
-    /// Verify this public key is valid (on curve)
-    pub fn verify_valid(&self, cs: ConstraintSystemRef<F>) -> Result<Boolean<F>, SynthesisError> {
-        AuthGadget::verify_public_key_valid(cs, &self.x, &self.y)
-    }
-}
+// PublicKeyVar removed - it used the wrong field type (FpVar instead of FqVar)
+// Use AuthGadget::scalar_mult_generator and compute_owner_address_from_fq instead
 
 /// Authentication witness containing all required authentication data
 #[derive(Clone)]
 pub struct AuthWitness {
     pub owner_sk: FpVar<F>,
-    pub public_key: PublicKeyVar,
     pub auth_type: AuthType,
 }
 
@@ -264,15 +204,8 @@ impl AuthWitness {
     ) -> Result<Self, SynthesisError> {
         let owner_sk_var = FpVar::new_witness(cs.clone(), || Ok(owner_sk))?;
         
-        // Derive public key from secret key
-        let (pk_x_fq, pk_y_fq) = AuthGadget::scalar_mult_generator(cs.clone(), &owner_sk_var)?;
-        let pk_x = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_x_fq)?;
-        let pk_y = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_y_fq)?;
-        let public_key = PublicKeyVar { x: pk_x, y: pk_y };
-        
         Ok(Self {
             owner_sk: owner_sk_var,
-            public_key,
             auth_type,
         })
     }
@@ -300,18 +233,24 @@ impl AuthWitness {
     
     /// Compute owner address for this authentication witness
     pub fn compute_owner_address(&self, cs: ConstraintSystemRef<F>) -> Result<FpVar<F>, SynthesisError> {
+        // Derive public key from secret key
+        let (pk_x_fq, pk_y_fq) = AuthGadget::scalar_mult_generator(cs.clone(), &self.owner_sk)?;
+        
         match self.auth_type {
             AuthType::Poseidon => {
-                self.public_key.to_owner_address(cs)
+                // Standard Poseidon address computation
+                AuthGadget::compute_owner_address_from_fq(cs, &pk_x_fq, &pk_y_fq)
             }
             AuthType::Ethereum => {
                 // For Ethereum auth, use different address derivation
-                let eth_pk = poseidon_hash_zk(&[self.public_key.x.clone(), self.public_key.y.clone()])?;
+                let pk_x = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_x_fq)?;
+                let pk_y = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_y_fq)?;
+                let eth_pk = poseidon_hash_zk(&[pk_x, pk_y])?;
                 poseidon_hash_zk(&[eth_pk])
             }
             AuthType::MultiSig { .. } => {
                 // Simplified multisig address computation
-                self.public_key.to_owner_address(cs)
+                AuthGadget::compute_owner_address_from_fq(cs, &pk_x_fq, &pk_y_fq)
             }
         }
     }
@@ -327,7 +266,7 @@ mod tests {
     #[test]
     fn test_ec_authentication() {
         let cs = ConstraintSystem::<F>::new_ref();
-        let mut rng = thread_rng();
+        let rng = thread_rng();
         
         // Use a smaller scalar for testing to avoid overflow issues
         let owner_sk = F::from(12345u64);
@@ -337,30 +276,12 @@ mod tests {
         let (pk_x_fq, pk_y_fq) = AuthGadget::scalar_mult_generator(cs.clone(), &owner_sk_var).unwrap();
         let pk_x = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_x_fq).unwrap();
         let pk_y = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_y_fq).unwrap();
-        let expected_addr = AuthGadget::compute_owner_address(cs.clone(), &pk_x, &pk_y).unwrap();
+        let expected_addr = AuthGadget::compute_owner_address_from_fq(cs.clone(), &pk_x_fq, &pk_y_fq).unwrap();
         
         // Verify authentication
         AuthGadget::verify_ec_authentication(cs.clone(), &owner_sk_var, &expected_addr).unwrap();
         
         assert!(cs.is_satisfied().unwrap(), "EC authentication constraints should be satisfied");
-    }
-
-    #[test]
-    fn test_public_key_var() {
-        let cs = ConstraintSystem::<F>::new_ref();
-        let mut rng = thread_rng();
-        
-        let pk_x = F::rand(&mut rng);
-        let pk_y = F::rand(&mut rng);
-        
-        let pk_var = PublicKeyVar::new_witness(cs.clone(), pk_x, pk_y).unwrap();
-        let addr = pk_var.to_owner_address(cs.clone()).unwrap();
-        
-        // Verify the address is computed correctly
-        let expected = AuthGadget::compute_owner_address(cs.clone(), &pk_var.x, &pk_var.y).unwrap();
-        addr.enforce_equal(&expected).unwrap();
-        
-        assert!(cs.is_satisfied().unwrap());
     }
 
     #[test]
