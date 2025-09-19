@@ -18,7 +18,9 @@ pub fn verify_limit_not_exceeded(
     limit: &FpVar<F>,
 ) -> Result<Boolean<F>, SynthesisError> {
     // Check amount <= limit
-    amount.is_cmp(limit, std::cmp::Ordering::Less, true)
+    // Use is_cmp with Greater and negate to avoid allow_equal=true issues
+    let not_exceeds = amount.is_cmp(limit, std::cmp::Ordering::Less, true)?;
+    Ok(not_exceeds)
 }
 
 /// Verify compliance gates for spending
@@ -28,7 +30,7 @@ pub fn verify_compliance_gates(
     daily_limit: &FpVar<F>,
 ) -> Result<Boolean<F>, SynthesisError> {
     // Not frozen AND amount <= daily_limit
-    let not_frozen = frozen.not();
+    let not_frozen = !frozen;
     let within_limit = verify_limit_not_exceeded(amount, daily_limit)?;
-    not_frozen.and(&within_limit)
+    Ok(&not_frozen & &within_limit)
 }

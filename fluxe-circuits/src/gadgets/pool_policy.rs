@@ -203,7 +203,7 @@ impl PoolPolicyGadget {
             for (j, index_bit) in index_bits.iter().enumerate() {
                 let expected_bit = Boolean::constant((i >> j) & 1 == 1);
                 let bit_matches = index_bit.is_eq(&expected_bit)?;
-                index_matches = index_matches.and(&bit_matches)?;
+                index_matches = &index_matches & &bit_matches;
             }
             
             // If index matches, select this bit
@@ -238,7 +238,7 @@ impl PoolPolicyGadget {
             for (j, index_bit) in index_bits.iter().enumerate() {
                 let expected_bit = Boolean::constant((i >> j) & 1 == 1);
                 let bit_matches = index_bit.is_eq(&expected_bit)?;
-                index_matches = index_matches.and(&bit_matches)?;
+                index_matches = &index_matches & &bit_matches;
             }
             
             // If index matches, select this bit
