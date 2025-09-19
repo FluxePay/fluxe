@@ -174,7 +174,7 @@ impl SetupManager {
         use ark_ff::UniformRand;
         use fluxe_core::data_structures::{Note, ExitReceipt};
         use fluxe_core::crypto::pedersen::PedersenCommitment;
-        use fluxe_core::merkle::MerklePath;
+        use fluxe_core::merkle::{MerklePath, AppendWitness};
         use ark_ec::CurveGroup;
         use ark_bls12_381::G1Projective;
         
@@ -240,6 +240,18 @@ impl SetupManager {
                 burned_nf: nf_in,
                 nonce: 1,
                 aux: F::from(0u64),
+            },
+            exit_append_witness: AppendWitness {
+                leaf_index: 0,
+                leaf: ExitReceipt {
+                    asset_type: 1,
+                    amount: 500u64.into(),
+                    burned_nf: nf_in,
+                    nonce: 1,
+                    aux: F::from(0u64),
+                }.hash(),
+                pre_siblings: vec![F::from(0u64); 32],
+                height: 32,
             },
             cmt_root: F::rand(rng),
             nft_root_old: F::from(0u64),

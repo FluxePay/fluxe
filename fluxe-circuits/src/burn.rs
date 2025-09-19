@@ -5,10 +5,11 @@ use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use fluxe_core::{
     data_structures::{ExitReceipt, Note},
-    merkle::{MerklePath, RangePath},
+    merkle::{MerklePath, RangePath, AppendWitness},
     types::*,
 };
 use crate::gadgets::sorted_insert::{SortedInsertWitness, SimtInsertVar};
+use crate::gadgets::merkle_append::ImtAppendProofVar;
 
 use crate::circuits::FluxeCircuit;
 use crate::gadgets::*;
@@ -47,6 +48,9 @@ pub struct BurnCircuit {
     
     /// Exit receipt
     pub exit_receipt: ExitReceipt,
+    
+    /// Append witness for EXIT_ROOT update
+    pub exit_append_witness: AppendWitness,
     
     // Public inputs
     /// Commitment tree root
@@ -87,6 +91,7 @@ impl BurnCircuit {
         nf_nonmembership: Option<RangePath>,
         nf_insert_witness: Option<SortedInsertWitness>,
         exit_receipt: ExitReceipt,
+        exit_append_witness: AppendWitness,
         cmt_root: MerkleRoot,
         nft_root_old: MerkleRoot,
         nft_root_new: MerkleRoot,
@@ -109,6 +114,7 @@ impl BurnCircuit {
             nf_nonmembership,
             nf_insert_witness,
             exit_receipt,
+            exit_append_witness,
             cmt_root,
             nft_root_old,
             nft_root_new,
@@ -255,16 +261,27 @@ impl ConstraintSynthesizer<F> for BurnCircuit {
             return Err(SynthesisError::Unsatisfiable);
         }
         
-        // For EXIT_ROOT (I-IMT): Simplified append verification
+        // For EXIT_ROOT (I-IMT): Proper append verification using ImtAppendProofVar
         let exit_hash = exit_var.hash()?;
-        let append_index = FpVar::constant(F::from(0u64)); // Would be actual index
-        let binding = poseidon_hash_zk(&[
-            exit_root_old_var.clone(),
-            exit_hash.clone(),
-            append_index,
-        ])?;
-        let computed_exit_root = poseidon_hash_zk(&[binding, exit_hash])?;
-        computed_exit_root.enforce_equal(&exit_root_new_var)?;
+        
+        // Create the append proof variable
+        let exit_append_proof = ImtAppendProofVar::new_witness(
+            cs.clone(),
+            self.exit_append_witness.clone(),
+            self.exit_root_old,
+            self.exit_root_new,
+        )?;
+        
+        // Verify the append operation
+        let append_valid = exit_append_proof.verify()?;
+        append_valid.enforce_equal(&Boolean::TRUE)?;
+        
+        // Verify the appended leaf is the exit receipt hash
+        exit_append_proof.appended_leaf.enforce_equal(&exit_hash)?;
+        
+        // Verify the roots match our public inputs
+        exit_append_proof.old_root.enforce_equal(&exit_root_old_var)?;
+        exit_append_proof.new_root.enforce_equal(&exit_root_new_var)?;
         
         // Constraint 10: Authorization check
         // Verify that the spender knows the nullifier key (already done via nullifier computation)
