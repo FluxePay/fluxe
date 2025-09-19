@@ -52,7 +52,7 @@ impl MerklePathVar {
         for (i, sibling) in self.siblings.iter().enumerate() {
             // Select based on bit i of index
             let is_left = if i < index_bits.len() {
-                index_bits[i].not()
+                !&index_bits[i]
             } else {
                 Boolean::FALSE
             };
@@ -80,7 +80,7 @@ impl MerklePathVar {
         
         for (i, sibling) in self.siblings.iter().enumerate() {
             let is_left = if i < index_bits.len() {
-                index_bits[i].not()
+                !&index_bits[i]
             } else {
                 Boolean::FALSE
             };
@@ -141,7 +141,7 @@ impl MerkleTreeGadget {
         // For now, we just check they're not equal (simplified)
         let not_eq_low = target.is_neq(low_key)?;
         let not_eq_high = target.is_neq(high_key)?;
-        let in_gap = not_eq_low.and(&not_eq_high)?;
+        let in_gap = &not_eq_low & &not_eq_high;
         
         in_gap.enforce_equal(&Boolean::TRUE)
     }
