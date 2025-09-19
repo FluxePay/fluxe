@@ -1,7 +1,7 @@
 use ark_bls12_381::Fr as F;
 use ark_ec::Group;
 use ark_ed_on_bls12_381::{
-    constraints::EdwardsVar as JubjubVar,
+    constraints::{EdwardsVar as JubjubVar, FqVar},
     EdwardsAffine,
     EdwardsProjective as Jubjub,
     Fq as JubjubBase,
@@ -12,6 +12,7 @@ use ark_r1cs_std::{
     fields::fp::FpVar,
     groups::CurveVar,
     prelude::*,
+    ToBitsGadget,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
@@ -22,6 +23,18 @@ use crate::gadgets::poseidon::poseidon_hash_zk;
 pub struct AuthGadget;
 
 impl AuthGadget {
+    /// Constrained conversion from Fq to Fr for hashing
+    /// This ensures the conversion is properly constrained in the circuit
+    fn fq_to_fr_constrained(
+        _cs: ConstraintSystemRef<F>,
+        fq: &FqVar,
+    ) -> Result<FpVar<F>, SynthesisError> {
+        // Get the canonical little-endian bit representation of the base field element
+        let bits = fq.to_bits_le()?;
+        // Pack these bits into the scalar field Fr
+        Boolean::le_bits_to_fp_var(&bits)
+    }
+    
     /// Verify EC-based authentication by deriving public key from secret key
     /// and computing owner address from public key coordinates
     pub fn verify_ec_authentication(
@@ -30,7 +43,11 @@ impl AuthGadget {
         expected_owner_addr: &FpVar<F>,
     ) -> Result<(), SynthesisError> {
         // Derive public key from secret key: pk = sk * G
-        let (pk_x, pk_y) = Self::scalar_mult_generator(cs.clone(), owner_sk)?;
+        let (pk_x_fq, pk_y_fq) = Self::scalar_mult_generator(cs.clone(), owner_sk)?;
+        
+        // Convert Fq coordinates to Fr for hashing
+        let pk_x = Self::fq_to_fr_constrained(cs.clone(), &pk_x_fq)?;
+        let pk_y = Self::fq_to_fr_constrained(cs.clone(), &pk_y_fq)?;
         
         // Compute owner address: addr = H(pk_x, pk_y)
         let computed_addr = Self::compute_owner_address(cs, &pk_x, &pk_y)?;
@@ -41,7 +58,9 @@ impl AuthGadget {
         Ok(())
     }
     
-    /// Compute owner address from public key coordinates
+    /// Compute owner address from public key coordinates (Fr)
+    /// DEPRECATED: Use compute_owner_address_from_fq for proper constrained conversion
+    #[deprecated(note = "Use compute_owner_address_from_fq for constrained Fq to Fr conversion")]
     pub fn compute_owner_address(
         _cs: ConstraintSystemRef<F>,
         pk_x: &FpVar<F>,
@@ -51,11 +70,23 @@ impl AuthGadget {
         poseidon_hash_zk(&[pk_x.clone(), pk_y.clone()])
     }
     
+    /// Compute owner address from Fq coordinates
+    pub fn compute_owner_address_from_fq(
+        cs: ConstraintSystemRef<F>,
+        pk_x_fq: &FqVar,
+        pk_y_fq: &FqVar,
+    ) -> Result<FpVar<F>, SynthesisError> {
+        let pk_x = Self::fq_to_fr_constrained(cs.clone(), pk_x_fq)?;
+        let pk_y = Self::fq_to_fr_constrained(cs, pk_y_fq)?;
+        poseidon_hash_zk(&[pk_x, pk_y])
+    }
+    
     /// Real scalar multiplication: pk = sk * G on Jubjub
+    /// Returns Fq coordinates to avoid unsafe conversions
     pub fn scalar_mult_generator(
         cs: ConstraintSystemRef<F>,
         scalar: &FpVar<F>,
-    ) -> Result<(FpVar<F>, FpVar<F>), SynthesisError> {
+    ) -> Result<(FqVar, FqVar), SynthesisError> {
         // Convert scalar to bits (little-endian)
         let bits = scalar.to_bits_le()?;
 
@@ -73,38 +104,20 @@ impl AuthGadget {
         let not_identity = pk_var.is_zero()?.not();
         not_identity.enforce_equal(&Boolean::TRUE)?;
 
-        // Extract x and y coordinates as field elements
-        // JubjubVar uses FqVar which is over the base field Fq
-        // We need to convert to Fr for compatibility with our Poseidon hash
-        // This conversion is sound because we're only using these for hashing
-        use ark_ff::{PrimeField, BigInteger};
-        use ark_ed_on_bls12_381::constraints::FqVar;
-        
-        // Get the coordinates as FqVar
-        let pk_x_fq: FqVar = pk_var.x.clone();
-        let pk_y_fq: FqVar = pk_var.y.clone();
-        
-        // Convert Fq coordinates to Fr by going through the value
-        // This is safe for hashing purposes
-        let pk_x = FpVar::new_witness(cs.clone(), || {
-            let x_val = pk_x_fq.value()?;
-            // Convert from Fq to Fr (both are 255-bit fields for BLS12-381)
-            let x_bigint = x_val.into_bigint();
-            let x_bytes = x_bigint.to_bytes_le();
-            let x_fr = F::from_le_bytes_mod_order(&x_bytes);
-            Ok(x_fr)
-        })?;
-        
-        let pk_y = FpVar::new_witness(cs.clone(), || {
-            let y_val = pk_y_fq.value()?;
-            // Convert from Fq to Fr 
-            let y_bigint = y_val.into_bigint();
-            let y_bytes = y_bigint.to_bytes_le();
-            let y_fr = F::from_le_bytes_mod_order(&y_bytes);
-            Ok(y_fr)
-        })?;
-
-        Ok((pk_x, pk_y))
+        // Return Fq coordinates directly without unsafe conversion
+        Ok((pk_var.x.clone(), pk_var.y.clone()))
+    }
+    
+    /// Scalar multiplication with Fr output for legacy compatibility
+    /// Uses constrained conversion from Fq to Fr
+    pub fn scalar_mult_generator_fr(
+        cs: ConstraintSystemRef<F>,
+        scalar: &FpVar<F>,
+    ) -> Result<(FpVar<F>, FpVar<F>), SynthesisError> {
+        let (pk_x_fq, pk_y_fq) = Self::scalar_mult_generator(cs.clone(), scalar)?;
+        let pk_x_fr = Self::fq_to_fr_constrained(cs.clone(), &pk_x_fq)?;
+        let pk_y_fr = Self::fq_to_fr_constrained(cs, &pk_y_fq)?;
+        Ok((pk_x_fr, pk_y_fr))
     }
     
     /// Verify public key is valid (on curve check)
@@ -160,7 +173,9 @@ impl AuthGadget {
         // Derive public keys for each secret key
         let mut public_keys = Vec::new();
         for sk in secret_keys {
-            let (pk_x, pk_y) = Self::scalar_mult_generator(cs.clone(), sk)?;
+            let (pk_x_fq, pk_y_fq) = Self::scalar_mult_generator(cs.clone(), sk)?;
+            let pk_x = Self::fq_to_fr_constrained(cs.clone(), &pk_x_fq)?;
+            let pk_y = Self::fq_to_fr_constrained(cs.clone(), &pk_y_fq)?;
             public_keys.push((pk_x, pk_y));
         }
         
@@ -250,7 +265,9 @@ impl AuthWitness {
         let owner_sk_var = FpVar::new_witness(cs.clone(), || Ok(owner_sk))?;
         
         // Derive public key from secret key
-        let (pk_x, pk_y) = AuthGadget::scalar_mult_generator(cs.clone(), &owner_sk_var)?;
+        let (pk_x_fq, pk_y_fq) = AuthGadget::scalar_mult_generator(cs.clone(), &owner_sk_var)?;
+        let pk_x = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_x_fq)?;
+        let pk_y = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_y_fq)?;
         let public_key = PublicKeyVar { x: pk_x, y: pk_y };
         
         Ok(Self {
@@ -317,7 +334,9 @@ mod tests {
         let owner_sk_var = FpVar::new_witness(cs.clone(), || Ok(owner_sk)).unwrap();
         
         // Derive public key and address
-        let (pk_x, pk_y) = AuthGadget::scalar_mult_generator(cs.clone(), &owner_sk_var).unwrap();
+        let (pk_x_fq, pk_y_fq) = AuthGadget::scalar_mult_generator(cs.clone(), &owner_sk_var).unwrap();
+        let pk_x = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_x_fq).unwrap();
+        let pk_y = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_y_fq).unwrap();
         let expected_addr = AuthGadget::compute_owner_address(cs.clone(), &pk_x, &pk_y).unwrap();
         
         // Verify authentication
@@ -392,7 +411,9 @@ mod tests {
         // Compute expected multisig address
         let mut public_keys = Vec::new();
         for sk_var in &secret_key_vars {
-            let (pk_x, pk_y) = AuthGadget::scalar_mult_generator(cs.clone(), sk_var).unwrap();
+            let (pk_x_fq, pk_y_fq) = AuthGadget::scalar_mult_generator(cs.clone(), sk_var).unwrap();
+            let pk_x = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_x_fq).unwrap();
+            let pk_y = AuthGadget::fq_to_fr_constrained(cs.clone(), &pk_y_fq).unwrap();
             public_keys.push((pk_x, pk_y));
         }
         
