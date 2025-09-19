@@ -587,14 +587,11 @@ impl ConstraintSynthesizer<F> for TransferCircuit {
                 let from_pool_1 = in_pool.is_eq(&FpVar::constant(F::from(1u64)))?;
                 let from_pool_2 = in_pool.is_eq(&FpVar::constant(F::from(2u64)))?;
                 let from_pool_3 = in_pool.is_eq(&FpVar::constant(F::from(3u64)))?;
-                let from_exit = from_pool_1.or(&from_pool_2)?.or(&from_pool_3)?;
-                let exit_to_general = to_general.and(&from_exit)?;
+                let from_exit = &(&from_pool_1 | &from_pool_2) | &from_pool_3;
+                let exit_to_general = &to_general & &from_exit;
                 
                 // Combine all allowed conditions
-                let transfer_allowed = same_pool
-                    .or(&is_next_pool)?
-                    .or(&from_general)?
-                    .or(&exit_to_general)?;
+                let transfer_allowed = &(&(&same_pool | &is_next_pool) | &from_general) | &exit_to_general;
                 
                 transfer_allowed.enforce_equal(&Boolean::TRUE)?;
             }

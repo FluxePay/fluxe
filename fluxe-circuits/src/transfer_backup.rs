@@ -358,7 +358,7 @@ impl ConstraintSynthesizer<F> for TransferCircuit {
             let pool_diff = out_pool - in_pool;
             let is_next_pool = pool_diff.is_eq(&FpVar::one())?; // Can transfer to next pool
             
-            let transfer_allowed = same_pool.or(&is_next_pool)?;
+            let transfer_allowed = &same_pool | &is_next_pool;
             transfer_allowed.enforce_equal(&Boolean::TRUE)?;
         }
         

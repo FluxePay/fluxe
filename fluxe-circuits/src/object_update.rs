@@ -330,10 +330,11 @@ impl ObjectUpdateCircuit {
         // In practice, method_id would be extracted from callback payload
         
         // Risk score can only increase or stay same (never decrease)
+        // Check if new >= old
         let risk_not_decreased = state_new.risk_score.is_cmp(
             &state_old.risk_score,
             std::cmp::Ordering::Greater,
-            true, // allow equal
+            true,
         )?;
         risk_not_decreased.enforce_equal(&Boolean::TRUE)?;
         
@@ -349,10 +350,8 @@ impl ObjectUpdateCircuit {
         
         // If frozen flag is set, limits must be zero
         let limits_sum = &state_new.daily_limit + &state_new.monthly_limit + &state_new.yearly_limit;
-        let is_frozen_and_limits_zero = state_new.frozen.and(
-            &limits_sum.is_eq(&FpVar::zero())?
-        )?;
-        let not_frozen_or_limits_ok = state_new.frozen.not().or(&is_frozen_and_limits_zero)?;
+        let is_frozen_and_limits_zero = &state_new.frozen & &limits_sum.is_eq(&FpVar::zero())?;
+        let not_frozen_or_limits_ok = &!&state_new.frozen | &is_frozen_and_limits_zero;
         not_frozen_or_limits_ok.enforce_equal(&Boolean::TRUE)?;
         
         // Jurisdiction bits must remain valid (non-zero means some jurisdiction)
@@ -360,10 +359,11 @@ impl ObjectUpdateCircuit {
         jurisdiction_valid.enforce_equal(&Boolean::TRUE)?;
         
         // Last review time can only increase (time moves forward)
+        // Check if new >= old
         let time_not_backwards = state_new.last_review_time.is_cmp(
             &state_old.last_review_time,
             std::cmp::Ordering::Greater,
-            true, // allow equal
+            true,
         )?;
         time_not_backwards.enforce_equal(&Boolean::TRUE)?;
         
