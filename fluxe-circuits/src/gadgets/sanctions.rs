@@ -4,6 +4,8 @@ use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::poseidon::poseidon_hash_zk;
+use crate::gadgets::merkle::MerklePathVar;
+use ark_r1cs_std::boolean::Boolean;
 
 /// Gadget for proving non-membership in sanctions list
 /// Uses sorted IMT (S-IMT) structure with gap proofs for efficiency
@@ -13,24 +15,20 @@ impl SanctionsChecker {
     /// Prove that an address/identifier is NOT in the sanctions list
     /// Uses non-membership proof via gap in sorted tree
     pub fn prove_not_sanctioned(
-        _cs: ConstraintSystemRef<F>,
+        cs: ConstraintSystemRef<F>,
         identifier: &FpVar<F>,
         sanctions_root: &FpVar<F>,
         low_leaf: &SanctionsLeafVar,
-        merkle_path: &[FpVar<F>],
+        merkle_path: &MerklePathVar,
     ) -> Result<(), SynthesisError> {
-        // Verify the low leaf is in the tree by computing root from path
+        // Verify the low leaf is in the tree
         let low_leaf_hash = low_leaf.hash()?;
         
-        // Manually compute root from path (simple binary merkle tree)
-        let mut current = low_leaf_hash;
-        for sibling in merkle_path {
-            // Hash current with sibling (order doesn't matter for simplified version)
-            current = poseidon_hash_zk(&[current, sibling.clone()])?;
-        }
+        // Ensure the path's leaf matches the low leaf hash
+        merkle_path.leaf.enforce_equal(&low_leaf_hash)?;
         
-        // Verify computed root matches expected
-        current.enforce_equal(sanctions_root)?;
+        // Verify the path is valid for the sanctions root
+        merkle_path.enforce_valid(sanctions_root)?;
         
         // Verify the gap: low_leaf.key < identifier < low_leaf.next_key
         Self::enforce_gap_constraint(identifier, low_leaf)?;
@@ -44,7 +42,7 @@ impl SanctionsChecker {
         identifiers: &[FpVar<F>],
         sanctions_root: &FpVar<F>,
         low_leaves: &[SanctionsLeafVar],
-        merkle_paths: &[Vec<FpVar<F>>],
+        merkle_paths: &[MerklePathVar],
     ) -> Result<(), SynthesisError> {
         if identifiers.len() != low_leaves.len() || identifiers.len() != merkle_paths.len() {
             return Err(SynthesisError::Unsatisfiable);
@@ -66,6 +64,25 @@ impl SanctionsChecker {
         identifier: &FpVar<F>,
         low_leaf: &SanctionsLeafVar,
     ) -> Result<(), SynthesisError> {
+        // First, add range constraints to ensure values are within expected bounds
+        // This is important for the positive check to be meaningful
+        use crate::gadgets::range_proof::RangeProofGadget;
+        RangeProofGadget::prove_range_bits(
+            identifier.cs(),
+            identifier,
+            64, // Assuming identifiers fit in 64 bits
+        )?;
+        RangeProofGadget::prove_range_bits(
+            low_leaf.key.cs(),
+            &low_leaf.key,
+            64,
+        )?;
+        RangeProofGadget::prove_range_bits(
+            low_leaf.next_key.cs(),
+            &low_leaf.next_key,
+            64,
+        )?;
+        
         // Check: low_leaf.key < identifier
         let diff1 = identifier - &low_leaf.key;
         Self::enforce_positive(&diff1)?;
@@ -92,7 +109,8 @@ impl SanctionsChecker {
         // Check not zero: at least one bit must be 1
         let mut is_zero = Boolean::TRUE;
         for bit in &bits {
-            is_zero = &is_zero & &!bit;
+            // is_zero = is_zero AND NOT(bit)
+            is_zero = &is_zero & &(!bit);
         }
         is_zero.enforce_equal(&Boolean::FALSE)?;
         
@@ -111,12 +129,16 @@ impl SanctionsChecker {
         // Check if zero
         let mut is_zero = Boolean::TRUE;
         for bit in &bits {
-            is_zero = &is_zero & &!bit;
+            // is_zero = is_zero AND NOT(bit)
+            is_zero = &is_zero & &(!bit);
         }
         
         // Check if positive (high bit is 0 and not zero)
         let is_positive = if let Some(high_bit) = bits.last() {
-            &!high_bit & &!&is_zero
+            let not_high_bit = !high_bit;
+            let not_is_zero = !&is_zero;
+            // is_positive = NOT(high_bit) AND NOT(is_zero)
+            &not_high_bit & &not_is_zero
         } else {
             !&is_zero
         };
@@ -178,8 +200,8 @@ impl SanctionsUtils {
         sender_addr: &FpVar<F>,
         recipient_addr: &FpVar<F>,
         sanctions_root: &FpVar<F>,
-        sender_proof: (&SanctionsLeafVar, &[FpVar<F>]),
-        recipient_proof: (&SanctionsLeafVar, &[FpVar<F>]),
+        sender_proof: (&SanctionsLeafVar, &MerklePathVar),
+        recipient_proof: (&SanctionsLeafVar, &MerklePathVar),
     ) -> Result<(), SynthesisError> {
         // Check sender not sanctioned
         SanctionsChecker::prove_not_sanctioned(
@@ -215,7 +237,7 @@ impl SanctionsUtils {
         cs: ConstraintSystemRef<F>,
         institution_id: &FpVar<F>,
         sanctions_root: &FpVar<F>,
-        proof: (&SanctionsLeafVar, &[FpVar<F>]),
+        proof: (&SanctionsLeafVar, &MerklePathVar),
     ) -> Result<(), SynthesisError> {
         SanctionsChecker::prove_not_sanctioned(
             cs,
@@ -230,7 +252,7 @@ impl SanctionsUtils {
 /// Batch sanctions checker for efficiency
 pub struct BatchSanctionsChecker {
     identifiers: Vec<FpVar<F>>,
-    proofs: Vec<(SanctionsLeafVar, Vec<FpVar<F>>)>,
+    proofs: Vec<(SanctionsLeafVar, MerklePathVar)>,
 }
 
 impl Default for BatchSanctionsChecker {
@@ -251,7 +273,7 @@ impl BatchSanctionsChecker {
         &mut self,
         identifier: FpVar<F>,
         low_leaf: SanctionsLeafVar,
-        merkle_path: Vec<FpVar<F>>,
+        merkle_path: MerklePathVar,
     ) {
         self.identifiers.push(identifier);
         self.proofs.push((low_leaf, merkle_path));
@@ -341,7 +363,12 @@ mod tests {
                 F::from(150 + i as u64), // next key
                 None,
             ).unwrap();
-            let path = vec![FpVar::zero(); 5]; // Dummy path
+            // Create a dummy MerklePathVar for testing
+            let path = MerklePathVar {
+                leaf_index: FpVar::zero(),
+                siblings: vec![FpVar::zero(); 5],
+                leaf: FpVar::zero(),
+            };
             
             checker.add_check(id, leaf, path);
         }
