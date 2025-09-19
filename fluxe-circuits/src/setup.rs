@@ -43,14 +43,14 @@ impl TrustedSetup {
         let pk_file = File::create(pk_path)?;
         let mut pk_writer = BufWriter::new(pk_file);
         self.proving_key.serialize_compressed(&mut pk_writer)
-            .map_err(std::io::Error::other)?;
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         pk_writer.flush()?;
         
         // Save verifying key
         let vk_file = File::create(vk_path)?;
         let mut vk_writer = BufWriter::new(vk_file);
         self.verifying_key.serialize_compressed(&mut vk_writer)
-            .map_err(std::io::Error::other)?;
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         vk_writer.flush()?;
         
         Ok(())
@@ -65,13 +65,13 @@ impl TrustedSetup {
         let pk_file = File::open(pk_path)?;
         let mut pk_reader = BufReader::new(pk_file);
         let proving_key = ProvingKey::deserialize_compressed(&mut pk_reader)
-            .map_err(std::io::Error::other)?;
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         
         // Load verifying key
         let vk_file = File::open(vk_path)?;
         let mut vk_reader = BufReader::new(vk_file);
         let verifying_key = VerifyingKey::deserialize_compressed(&mut vk_reader)
-            .map_err(std::io::Error::other)?;
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         
         Ok(Self {
             proving_key,
