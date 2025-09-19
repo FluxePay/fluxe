@@ -1,13 +1,12 @@
 use ark_bls12_381::Fr as F;
 use ark_ff::UniformRand;
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
-use ark_r1cs_std::prelude::*;
-use ark_std::rand::{RngCore, SeedableRng};
+use ark_std::rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
 use fluxe_core::{
-    merkle::{IncrementalTree, SortedTree, MerklePath, RangePath, AppendWitness},
-    data_structures::{Note, ExitReceipt, ComplianceState},
+    merkle::{IncrementalTree, SortedTree, MerklePath, AppendWitness},
+    data_structures::{Note, ExitReceipt},
     crypto::{
         pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness},
         compute_ec_public_key, poseidon_hash,
@@ -72,7 +71,7 @@ fn generate_sorted_insert_witness(
 
 #[test]
 fn test_burn_with_nonmembership_proof() {
-    use fluxe_core::merkle::SortedLeaf;
+    
     let mut rng = ChaCha20Rng::seed_from_u64(42);
     let params = PedersenParams::setup_value_commitment();
     
@@ -246,7 +245,7 @@ fn test_minimal_burn() {
     };
     use crate::compute_ec_public_key;
     use fluxe_circuits::gadgets::sorted_insert::SortedInsertWitness;
-    use fluxe_circuits::FluxeCircuit;
+    
     use ark_relations::r1cs::ConstraintSystem;
     
     let mut rng = ChaCha20Rng::seed_from_u64(42);
@@ -361,7 +360,7 @@ fn test_minimal_burn() {
 
 #[test]
 fn test_transfer_with_multiple_nonmembership_proofs() {
-    use fluxe_core::merkle::SortedLeaf;
+    
     let mut rng = ChaCha20Rng::seed_from_u64(42);
     let params = PedersenParams::setup_value_commitment();
     
@@ -556,7 +555,7 @@ fn test_transfer_with_multiple_nonmembership_proofs() {
 
 #[test]
 fn test_sorted_tree_gap_proofs() {
-    let mut rng = ChaCha20Rng::seed_from_u64(42);
+    let rng = ChaCha20Rng::seed_from_u64(42);
     let mut tree = SortedTree::new(16);
     
     // Insert some values
@@ -584,7 +583,7 @@ fn test_sorted_tree_gap_proofs() {
     
     for test_val in &test_values {
         let proof = tree.prove_non_membership(*test_val)
-            .expect(&format!("Should get non-membership proof for {:?}", test_val));
+            .unwrap_or_else(|_| panic!("Should get non-membership proof for {:?}", test_val));
         
         // Verify the proof is correct
         assert_eq!(proof.target, *test_val, "Target should match");

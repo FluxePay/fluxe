@@ -10,7 +10,7 @@ use fluxe_core::{
         pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness},
         poseidon_hash, compute_ec_public_key,
     },
-    merkle::{IncrementalTree, MerklePath, AppendWitness, SortedTree, SortedLeaf, RangePath},
+    merkle::{IncrementalTree, SortedTree},
     types::*,
 };
 use fluxe_circuits::gadgets::sorted_insert::SortedInsertWitness;
@@ -164,7 +164,7 @@ fn test_value_conservation() {
     let cmt_root_new = cmt_tree.root();
     
     // Create a proper sorted tree for nullifiers
-    use fluxe_core::merkle::{SortedTree, SortedLeaf, RangePath};
+    use fluxe_core::merkle::SortedTree;
     let mut nft_tree = SortedTree::new(16);
     
     // Insert some dummy values to make the tree non-empty
@@ -190,7 +190,7 @@ fn test_value_conservation() {
     // So we need to generate witnesses for that specific order
     
     // First, let's sort the nullifiers to ensure consistent ordering
-    let mut nf_pairs = vec![(nf1, 0), (nf2, 1)];
+    let nf_pairs = [(nf1, 0), (nf2, 1)];
     // Don't sort - keep them in original order as the circuit expects
     
     // Generate witnesses for sequential insertion in the order they appear
@@ -650,7 +650,7 @@ fn test_nullifier_computation() {
     let nk = F::rand(&mut rng);
     
     // Compute expected nullifier
-    use fluxe_core::crypto::poseidon_hash;
+    
     let expected_nf = note.nullifier(&nk);
     
     // The circuit will verify this nullifier computation

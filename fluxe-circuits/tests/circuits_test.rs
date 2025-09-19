@@ -1,8 +1,6 @@
-use ark_bls12_381::{Bls12_381, Fr as F};
+use ark_bls12_381::Fr as F;
 use ark_ff::UniformRand;
-use ark_groth16::Groth16;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem};
-use ark_snark::SNARK;
 use fluxe_circuits::{
     circuits::FluxeCircuit,
     mint::MintCircuit,
@@ -15,10 +13,9 @@ use fluxe_core::{
         poseidon_hash, 
         blake2b_hash,
         pedersen::{PedersenCommitment, PedersenParams, PedersenRandomness},
-        compute_ec_public_key,
     },
     data_structures::{Note, ComplianceState, ZkObject, IngressReceipt, ExitReceipt},
-    merkle::{IncrementalTree, MerklePath, SortedTree, SortedLeaf, RangePath, AppendWitness},
+    merkle::{MerklePath, SortedLeaf, RangePath, AppendWitness},
     types::*,
 };
 use fluxe_circuits::gadgets::sorted_insert::SortedInsertWitness;
@@ -482,7 +479,7 @@ fn test_transfer_circuit_basic() {
     
     // Test public inputs
     let public_inputs = circuit.public_inputs();
-    assert!(public_inputs.len() > 0);
+    assert!(!public_inputs.is_empty());
 }
 
 #[test]
