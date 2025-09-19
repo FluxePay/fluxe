@@ -6,7 +6,7 @@ use fluxe_core::{
     types::*,
 };
 use fluxe_circuits::gadgets::{
-    range_proof::{RangeProofGadget, RangeUtils},
+    range_proof::RangeProofGadget,
     sanctions::{SanctionsChecker, SanctionsLeafVar},
     pool_policy::{PoolPolicyGadget, PoolPolicyVar, PoolPolicyUtils},
 };
@@ -136,12 +136,13 @@ fn test_range_proof_gadgets() {
     assert!(cs.is_satisfied().unwrap());
     println!("✓ Range bounds proof works");
     
-    // Test utility functions
-    RangeUtils::prove_value_64bit(cs.clone(), &value_var).unwrap();
+    // Test utility functions - prove value fits in 64 bits
+    RangeProofGadget::prove_range_bits(cs.clone(), &value_var, 64).unwrap();
     assert!(cs.is_satisfied().unwrap());
     
+    // Test asset type fits in 32 bits
     let asset_var = FpVar::new_witness(cs.clone(), || Ok(F::from(1u64))).unwrap();
-    RangeUtils::prove_asset_type(cs.clone(), &asset_var).unwrap();
+    RangeProofGadget::prove_range_bits(cs.clone(), &asset_var, 32).unwrap();
     assert!(cs.is_satisfied().unwrap());
     println!("✓ Range utility functions work");
     
