@@ -15,17 +15,6 @@ pub struct RangeProofGadget;
 
 impl RangeProofGadget {
     /// Prove that a value fits within the specified number of bits.
-    /// Compatibility wrapper that calls prove_range_bits.
-    #[deprecated(note = "Use prove_range_bits directly")]
-    pub fn prove_range(
-        cs: ConstraintSystemRef<F>,
-        value: &FpVar<F>,
-        bits: usize,
-    ) -> Result<(), SynthesisError> {
-        Self::prove_range_bits(cs, value, bits)
-    }
-    
-    /// Prove that a value fits within the specified number of bits.
     /// 
     /// This is the ONLY range proof method that should be used.
     /// It properly decomposes the value into bits and verifies upper bits are zero.
