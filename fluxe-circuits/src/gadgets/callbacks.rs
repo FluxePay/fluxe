@@ -1,4 +1,5 @@
 use ark_bls12_381::Fr as F;
+use ark_ed_on_bls12_381::constraints::FqVar;
 use ark_r1cs_std::{
     boolean::Boolean,
     fields::fp::FpVar,
@@ -110,20 +111,19 @@ impl CallbackInvocationVar {
     }
     
     /// Verify the signature on this invocation using Schnorr on Jubjub
-    /// The signature should be valid under the provider's public key
     /// 
     /// Parameters:
     /// - cs: Constraint system reference
-    /// - pk_x, pk_y: Provider's public key coordinates (in Fr)
-    /// - r_x, r_y: Signature R point coordinates (in Fr)
-    /// - s: Signature scalar
+    /// - pk_x_fq, pk_y_fq: Provider's public key coordinates in Fq (Jubjub base field)
+    /// - r_x_fq, r_y_fq: Signature R point coordinates in Fq
+    /// - s: Signature scalar in Fr
     pub fn verify_signature(
         &self,
         cs: ConstraintSystemRef<F>,
-        pk_x: &FpVar<F>,
-        pk_y: &FpVar<F>,
-        r_x: &FpVar<F>,
-        r_y: &FpVar<F>,
+        pk_x_fq: &FqVar,
+        pk_y_fq: &FqVar,
+        r_x_fq: &FqVar,
+        r_y_fq: &FqVar,
         s: &FpVar<F>,
     ) -> Result<Boolean<F>, SynthesisError> {
         // Build message fields: [ticket, timestamp, payload_hash]
@@ -139,14 +139,8 @@ impl CallbackInvocationVar {
             payload_hash,
         ];
         
-        // Use SchnorrGadget to verify the signature
-        SchnorrGadget::verify(cs, pk_x, pk_y, r_x, r_y, s, &msg_fields)
-    }
-    
-    /// Legacy verify_signature for backward compatibility (returns false)
-    pub fn verify_signature_stub(&self) -> Result<Boolean<F>, SynthesisError> {
-        // This is the old stub method - returns false for safety
-        Ok(Boolean::FALSE)
+        // Use SchnorrGadget with proper Fq coordinates
+        SchnorrGadget::verify_with_fq_coords(cs, pk_x_fq, pk_y_fq, r_x_fq, r_y_fq, s, &msg_fields)
     }
     
     /// Compute hash of this invocation

@@ -1,4 +1,5 @@
 use ark_bls12_381::Fr as F;
+use ark_ed_on_bls12_381::{Fq as JubjubFq, constraints::FqVar};
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
@@ -34,8 +35,8 @@ pub struct ObjectUpdateCircuit {
     pub callback_invocation: Option<CallbackInvocation>,
     
     /// Schnorr signature components for callback verification (if invoked)
-    /// (provider_pk_x, provider_pk_y, sig_r_x, sig_r_y, sig_s)
-    pub callback_signature: Option<(F, F, F, F, F)>,
+    /// (provider_pk_x, provider_pk_y, sig_r_x, sig_r_y) in Jubjub Fq, sig_s in Fr
+    pub callback_signature: Option<(JubjubFq, JubjubFq, JubjubFq, JubjubFq, F)>,
     
     /// Merkle path for callback in CB_ROOT (if invoked)
     pub cb_path: Option<MerklePath>,
@@ -224,15 +225,15 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
                     
                     // Verify signature on invocation payload
                     if invocation.signature.is_some() && self.callback_signature.is_some() {
-                        // Witness the signature components
+                        // Witness the signature components (Fq for curve points, Fr for scalar)
                         let (pk_x, pk_y, r_x, r_y, s) = self.callback_signature.unwrap();
-                        let pk_x_var = FpVar::new_witness(cs.clone(), || Ok(pk_x))?;
-                        let pk_y_var = FpVar::new_witness(cs.clone(), || Ok(pk_y))?;
-                        let r_x_var = FpVar::new_witness(cs.clone(), || Ok(r_x))?;
-                        let r_y_var = FpVar::new_witness(cs.clone(), || Ok(r_y))?;
+                        let pk_x_var = FqVar::new_witness(cs.clone(), || Ok(pk_x))?;
+                        let pk_y_var = FqVar::new_witness(cs.clone(), || Ok(pk_y))?;
+                        let r_x_var = FqVar::new_witness(cs.clone(), || Ok(r_x))?;
+                        let r_y_var = FqVar::new_witness(cs.clone(), || Ok(r_y))?;
                         let s_var = FpVar::new_witness(cs.clone(), || Ok(s))?;
                         
-                        // Verify Schnorr signature
+                        // Verify Schnorr signature with proper Fq coordinates
                         let sig_valid = invocation_var.verify_signature(
                             cs.clone(),
                             &pk_x_var,
@@ -243,10 +244,8 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
                         )?;
                         sig_valid.enforce_equal(&Boolean::TRUE)?;
                     } else if invocation.signature.is_some() {
-                        // Fallback: use stub verification (returns false)
-                        let sig_valid = invocation_var.verify_signature_stub()?;
-                        // For backward compatibility, just warn but don't fail
-                        eprintln!("WARNING: Callback signature provided but no signature data for verification");
+                        // Signature provided but no witness data - this is an error
+                        return Err(SynthesisError::AssignmentMissing);
                     }
                 } else {
                     // Fallback: simplified check
