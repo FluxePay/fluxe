@@ -33,23 +33,23 @@ impl ComparisonGadget {
         // Iterate from most significant bit
         for i in (0..max_len).rev() {
             // If not yet determined and a[i] < b[i], then a < b
-            let a_bit_is_zero = a_bits_padded[i].not();
+            let a_bit_is_zero = !&a_bits_padded[i];
             let b_bit_is_one = b_bits_padded[i].clone();
-            let this_pos_less = a_bit_is_zero.and(&b_bit_is_one)?;
+            let this_pos_less = &a_bit_is_zero & &b_bit_is_one;
             
             // If not yet determined and a[i] > b[i], then a > b (determined but not less)
             let a_bit_is_one = a_bits_padded[i].clone();
-            let b_bit_is_zero = b_bits_padded[i].not();
-            let this_pos_greater = a_bit_is_one.and(&b_bit_is_zero)?;
+            let b_bit_is_zero = !&b_bits_padded[i];
+            let this_pos_greater = &a_bit_is_one & &b_bit_is_zero;
             
             // Update result if not yet determined
-            let not_determined = determined.not();
-            let update_to_less = not_determined.and(&this_pos_less)?;
-            result = result.or(&update_to_less)?;
+            let not_determined = !&determined;
+            let update_to_less = &not_determined & &this_pos_less;
+            result = &result | &update_to_less;
             
             // Mark as determined if we found a difference
-            let found_difference = this_pos_less.or(&this_pos_greater)?;
-            determined = determined.or(&found_difference)?;
+            let found_difference = &this_pos_less | &this_pos_greater;
+            determined = &determined | &found_difference;
         }
         
         Ok(result)
@@ -73,7 +73,7 @@ impl ComparisonGadget {
     ) -> Result<Boolean<F>, SynthesisError> {
         // a <= b iff !(a > b)
         let gt = Self::is_greater_than(cs, a, b)?;
-        Ok(gt.not())
+        Ok(!gt)
     }
     
     /// Check if a >= b for field elements
@@ -84,7 +84,7 @@ impl ComparisonGadget {
     ) -> Result<Boolean<F>, SynthesisError> {
         // a >= b iff !(a < b)
         let lt = Self::is_less_than(cs, a, b)?;
-        Ok(lt.not())
+        Ok(!lt)
     }
     
     /// Check if value is in range [min, max]
@@ -96,7 +96,7 @@ impl ComparisonGadget {
     ) -> Result<Boolean<F>, SynthesisError> {
         let gte_min = Self::is_greater_than_or_equal(cs.clone(), value, min)?;
         let lte_max = Self::is_less_than_or_equal(cs, value, max)?;
-        gte_min.and(&lte_max)
+        Ok(&gte_min & &lte_max)
     }
     
     /// Pad bits to desired length
@@ -130,19 +130,19 @@ impl ComparisonGadget {
             let b_i = &b_bits_64[i];
             
             // a[i] = 0 and b[i] = 1 => a < b at position i
-            let less_at_i = a_i.not().and(b_i)?;
+            let less_at_i = &!a_i & b_i;
             
             // a[i] = 1 and b[i] = 0 => a > b at position i  
-            let greater_at_i = a_i.and(&b_i.not())?;
+            let greater_at_i = a_i & &!b_i;
             
             // Update result if not determined
-            let not_determined = determined.not();
-            let should_set_less = not_determined.and(&less_at_i)?;
-            result = result.or(&should_set_less)?;
+            let not_determined = !&determined;
+            let should_set_less = &not_determined & &less_at_i;
+            result = &result | &should_set_less;
             
             // Mark as determined if difference found
-            let found_diff = less_at_i.or(&greater_at_i)?;
-            determined = determined.or(&found_diff)?;
+            let found_diff = &less_at_i | &greater_at_i;
+            determined = &determined | &found_diff;
         }
         
         Ok(result)

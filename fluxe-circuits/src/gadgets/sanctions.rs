@@ -78,7 +78,8 @@ impl SanctionsChecker {
         let positive_diff = Self::enforce_positive_conditional(&diff2)?;
         
         // Either next_key is zero OR the difference is positive
-        Boolean::or(&is_zero, &positive_diff)?.enforce_equal(&Boolean::TRUE)?;
+        let either = &is_zero | &positive_diff;
+        either.enforce_equal(&Boolean::TRUE)?;
         
         Ok(())
     }
@@ -91,7 +92,7 @@ impl SanctionsChecker {
         // Check not zero: at least one bit must be 1
         let mut is_zero = Boolean::TRUE;
         for bit in &bits {
-            is_zero = is_zero.and(&bit.not())?;
+            is_zero = &is_zero & &!bit;
         }
         is_zero.enforce_equal(&Boolean::FALSE)?;
         
@@ -110,14 +111,14 @@ impl SanctionsChecker {
         // Check if zero
         let mut is_zero = Boolean::TRUE;
         for bit in &bits {
-            is_zero = is_zero.and(&bit.not())?;
+            is_zero = &is_zero & &!bit;
         }
         
         // Check if positive (high bit is 0 and not zero)
         let is_positive = if let Some(high_bit) = bits.last() {
-            high_bit.not().and(&is_zero.not())?
+            &!high_bit & &!&is_zero
         } else {
-            is_zero.not()
+            !&is_zero
         };
         
         Ok(is_positive)
