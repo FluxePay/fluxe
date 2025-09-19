@@ -20,7 +20,6 @@ use ark_r1cs_std::{
     prelude::*,
 };
 use ark_relations::r1cs::ConstraintSystem;
-use ark_ff::UniformRand;
 use rand::thread_rng;
 
 #[test]
@@ -34,22 +33,22 @@ fn test_boolean_bitwise_operations() {
     
     // Test AND operation using bitwise &
     let and_result = &a & &b;
-    assert_eq!(and_result.value().unwrap(), false);
+    assert!(!and_result.value().unwrap());
     
     // Test OR operation using bitwise |
     let or_result = &a | &b;
-    assert_eq!(or_result.value().unwrap(), true);
+    assert!(or_result.value().unwrap());
     
     // Test NOT operation using bitwise !
     let not_a = !&a;
-    assert_eq!(not_a.value().unwrap(), false);
+    assert!(!not_a.value().unwrap());
     
     let not_b = !&b;
-    assert_eq!(not_b.value().unwrap(), true);
+    assert!(not_b.value().unwrap());
     
     // Test chained operations
     let complex = &(&a | &b) & &(!&b);
-    assert_eq!(complex.value().unwrap(), true); // (true | false) & true = true
+    assert!(complex.value().unwrap()); // (true | false) & true = true
     
     assert!(cs.is_satisfied().unwrap());
 }
@@ -93,7 +92,7 @@ fn test_range_proof_le_bits_to_fp() {
     use fluxe_circuits::gadgets::range_proof::RangeProofGadget;
     
     let cs = ConstraintSystem::<F>::new_ref();
-    let mut rng = thread_rng();
+    let rng = thread_rng();
     
     // Test that le_bits_to_fp is publicly accessible and works correctly
     let value = F::from(42u64);
@@ -239,7 +238,7 @@ fn test_io_error_compatibility() {
     use std::io;
     
     let custom_error = "Test error";
-    let io_error = io::Error::new(io::ErrorKind::Other, custom_error);
+    let io_error = io::Error::other(custom_error);
     
     assert_eq!(io_error.kind(), io::ErrorKind::Other);
     assert_eq!(io_error.to_string(), custom_error);
@@ -298,7 +297,7 @@ fn test_integrated_circuit_operations() {
     };
     
     let cs = ConstraintSystem::<F>::new_ref();
-    let mut rng = thread_rng();
+    let rng = thread_rng();
     
     // Create test values
     let value1 = FpVar::new_witness(cs.clone(), || Ok(F::from(100u64))).unwrap();

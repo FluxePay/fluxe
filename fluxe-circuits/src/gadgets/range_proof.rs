@@ -1,5 +1,5 @@
 use ark_bls12_381::Fr as F;
-use ark_ff::{Zero, Field, One};
+use ark_ff::{Zero, One};
 use ark_r1cs_std::{
     boolean::Boolean,
     fields::fp::FpVar,
