@@ -5,7 +5,7 @@ pub mod merkle;
 pub mod merkle_append;
 pub mod sorted_insert;
 pub mod note;
-pub mod pedersen;
+// pub mod pedersen_ec; // Temporarily disabled - needs scalar multiplication fix
 pub mod pedersen_simple;
 pub mod poseidon;
 pub mod receipts;
@@ -25,7 +25,8 @@ pub use merkle::*;
 pub use merkle_append::*;
 pub use sorted_insert::*;
 pub use note::*;
-pub use pedersen::*;
+// pub use pedersen::*; // Disabled - insecure module
+// pub use pedersen_ec::*; // Temporarily disabled - needs scalar multiplication fix
 pub use pedersen_simple::*;
 pub use poseidon::*;
 pub use receipts::*;

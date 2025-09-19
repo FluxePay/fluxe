@@ -8,13 +8,15 @@ use fluxe_core::{
     data_structures::Note,
 };
 
-use crate::gadgets::{pedersen::PedersenCommitmentVar, poseidon::poseidon_hash_zk};
+use crate::gadgets::poseidon::poseidon_hash_zk;
 
 /// Note variable for circuits
 #[derive(Clone)]
 pub struct NoteVar {
     pub asset_type: FpVar<F>,
-    pub v_comm: PedersenCommitmentVar,
+    /// NOTE: v_comm is treated as an opaque field (x-coordinate of native commitment).
+    /// No in-circuit opening is enforced here until core & gadget schemes are aligned.
+    pub v_comm_x: FpVar<F>,
     pub value: FpVar<F>, // Actual value (private)
     pub owner_addr: FpVar<F>,
     pub psi: Vec<UInt8<F>>,
@@ -48,7 +50,7 @@ impl NoteVar {
         let v_comm_bytes = note.v_comm.commitment.x.into_bigint().to_bytes_le();
         let v_comm_x_fr = fluxe_core::utils::bytes_to_field(&v_comm_bytes);
         let commitment_x = FpVar::new_witness(cs.clone(), || Ok(v_comm_x_fr))?;
-        let v_comm = PedersenCommitmentVar { commitment_x };
+        let v_comm_x = commitment_x;
         
         let owner_addr = FpVar::new_witness(cs.clone(), || Ok(note.owner_addr))?;
         
@@ -66,7 +68,7 @@ impl NoteVar {
         
         Ok(Self {
             asset_type,
-            v_comm,
+            v_comm_x,
             value: value_var,
             owner_addr,
             psi,
@@ -112,7 +114,7 @@ impl NoteVar {
         let input = vec![
             dom_note,
             self.asset_type.clone(),
-            self.v_comm.commitment_x.clone(), // Use x-coordinate of commitment point
+            self.v_comm_x.clone(), // Use x-coordinate of commitment point
             self.owner_addr.clone(),
             psi_field,
             self.chain_hint.clone(),

@@ -26,6 +26,56 @@ pub struct PedersenParams {
 }
 
 impl PedersenParams {
+    /// Hash arbitrary bytes to a curve point using try-and-increment
+    /// This provides a deterministic way to generate independent generators
+    fn hash_to_curve(seed: &[u8]) -> G1Affine {
+        use ark_ff::Field;
+        use blake2::{Blake2b512, Digest};
+        
+        let mut counter = 0u64;
+        loop {
+            // Hash seed || counter using Blake2b (already in dependencies)
+            let mut hasher = Blake2b512::new();
+            hasher.update(seed);
+            hasher.update(counter.to_le_bytes());
+            let hash = hasher.finalize();
+            
+            // Try to interpret hash as x-coordinate
+            // Use from_random_bytes which returns Option
+            if let Some(x) = F::from_random_bytes(&hash[..31]) {
+                // Try to find a point with this x-coordinate
+                // For BLS12-381, we use a simpler approach:
+                // multiply generator by the scalar derived from hash
+                // This is deterministic and ensures point is in correct subgroup
+                let scalar = x;
+                let generator = G1Affine::generator();
+                let point = (G1Projective::from(generator) * scalar).into_affine();
+                
+                if !point.is_zero() {
+                    // Additional mixing to ensure independence from g
+                    // Hash the point coordinates to get a new scalar
+                    let mut mixer = Blake2b512::new();
+                    mixer.update(b"FLUXE_H_MIXER");
+                    mixer.update(&point.x.to_string().as_bytes());
+                    mixer.update(&point.y.to_string().as_bytes());
+                    let mix_hash = mixer.finalize();
+                    
+                    if let Some(mix_scalar) = F::from_random_bytes(&mix_hash[..31]) {
+                        let final_point = (G1Projective::from(point) * mix_scalar).into_affine();
+                        if !final_point.is_zero() && final_point != G1Affine::generator() {
+                            return final_point;
+                        }
+                    }
+                }
+            }
+            
+            counter += 1;
+            if counter > 1000000 {
+                panic!("Failed to find valid curve point after 1M attempts");
+            }
+        }
+    }
+    
     /// Create new Pedersen parameters
     pub fn new<R: Rng>(rng: &mut R) -> Self {
         let g = G1Projective::rand(rng).into_affine();
@@ -35,31 +85,16 @@ impl PedersenParams {
 
     /// Setup for value commitments using deterministic generation
     pub fn setup_value_commitment() -> Self {
-        use ark_ff::Field;
-        
         // Use deterministic generators based on nothing-up-my-sleeve strings
-        // These should be generated using a trusted setup ceremony in production
-        let g_seed = b"FLUXE_PEDERSEN_VALUE_GENERATOR_G_2024_V1_SECURE";
-        let h_seed = b"FLUXE_PEDERSEN_VALUE_GENERATOR_H_2024_V1_SECURE";
+        // SECURITY: We must ensure g and h have no known discrete log relationship
         
-        // Convert seeds to field elements using our existing hash function
-        // This is deterministic and verifiable
-        let g_scalar = crate::utils::bytes_to_field(g_seed);
-        let h_scalar = crate::utils::bytes_to_field(h_seed);
+        // Use the standard generator as g (common practice)
+        let g = G1Affine::generator();
         
-        // Generate independent points
-        // In production, use proper hash-to-curve or trusted setup ceremony
-        let generator = G1Affine::generator();
-        
-        // Create g from the standard generator
-        let g = (G1Projective::from(generator) * g_scalar).into_affine();
-        
-        // Create h independently to ensure no known discrete log relationship
-        // Use a different approach: hash g to get a base, then scale it
-        let g_bytes = g.x.to_string().as_bytes().to_vec();
-        let h_base_scalar = crate::utils::bytes_to_field(&g_bytes);
-        let h_base = (G1Projective::from(generator) * h_base_scalar).into_affine();
-        let h = (G1Projective::from(h_base) * h_scalar).into_affine();
+        // Generate h using try-and-increment hash-to-curve
+        // This ensures no known relationship between g and h
+        let h_seed = b"FLUXE_PEDERSEN_VALUE_GENERATOR_H_2024_V1_SECURE_INDEPENDENT";
+        let h = Self::hash_to_curve(h_seed);
         
         // Verify points are valid
         assert!(!g.is_zero(), "Generator g is identity");

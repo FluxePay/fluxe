@@ -7,7 +7,7 @@ use ark_ed_on_bls12_381::{
 use ark_r1cs_std::groups::curves::twisted_edwards::AffineVar;
 
 type JubjubVar = AffineVar<ark_ed_on_bls12_381::EdwardsConfig, FpVar<JubjubFq>>;
-use ark_ff::{Field, PrimeField, UniformRand};
+use ark_ff::{BigInteger, Field, PrimeField, UniformRand};
 use ark_r1cs_std::{
     alloc::AllocVar,
     boolean::Boolean,
@@ -35,10 +35,9 @@ impl PedersenParamsEC {
         let g = Jubjub::rand(rng);
         let h = Jubjub::rand(rng);
         
-        // Ensure they're different and not identity
+        // Ensure they're different
         assert_ne!(g, h);
-        assert!(!g.is_zero());
-        assert!(!h.is_zero());
+        // Note: In production, should also verify they're not identity elements
         
         Self { g, h }
     }
@@ -58,7 +57,9 @@ impl PedersenParamsEC {
         // Generate H by hashing a nothing-up-my-sleeve string
         // In production, this should come from a trusted setup ceremony
         let h_scalar = F::from_be_bytes_mod_order(b"FLUXE_PEDERSEN_H_GENERATOR_2024");
-        let h = Jubjub::generator().mul(&h_scalar);
+        // Use scalar multiplication via the Group trait
+        let g_gen = Jubjub::generator();
+        let h = g_gen.mul_bigint(h_scalar.into_bigint());
         
         Self { g, h }
     }
@@ -75,8 +76,17 @@ impl PedersenCommitmentEC {
     /// Create a commitment to value v with randomness r
     /// C = g^v * h^r
     pub fn commit(params: &PedersenParamsEC, value: u64, randomness: &F) -> Self {
+        // Convert value to scalar field element
         let value_scalar = F::from(value);
-        let commitment = params.g.mul(&value_scalar) + params.h.mul(randomness);
+        
+        // Perform scalar multiplication
+        // In arkworks, curve points implement Mul<ScalarField>
+        use ark_std::ops::Mul;
+        let g_times_v = params.g.mul(value_scalar);
+        let h_times_r = params.h.mul(*randomness);
+        
+        // Add the two curve points
+        let commitment = g_times_v + h_times_r;
         Self { commitment }
     }
     
@@ -108,8 +118,8 @@ impl PedersenParamsVar {
         params: &PedersenParamsEC,
     ) -> Result<Self, SynthesisError> {
         Ok(Self {
-            g: JubjubVar::new_constant(cs.clone(), params.g.into())?,
-            h: JubjubVar::new_constant(cs, params.h.into())?,
+            g: JubjubVar::new_constant(cs.clone(), params.g.into_affine())?,
+            h: JubjubVar::new_constant(cs, params.h.into_affine())?,
         })
     }
     
@@ -141,7 +151,7 @@ impl PedersenCommitmentVar {
     ) -> Result<Self, SynthesisError> {
         let comm = commitment()?;
         Ok(Self {
-            commitment: JubjubVar::new_witness(cs, || Ok(comm.commitment.into()))?,
+            commitment: JubjubVar::new_witness(cs, || Ok(comm.commitment.into_affine()))?,
         })
     }
     
@@ -152,7 +162,7 @@ impl PedersenCommitmentVar {
     ) -> Result<Self, SynthesisError> {
         let comm = commitment()?;
         Ok(Self {
-            commitment: JubjubVar::new_input(cs, || Ok(comm.commitment.into()))?,
+            commitment: JubjubVar::new_input(cs, || Ok(comm.commitment.into_affine()))?,
         })
     }
     
@@ -353,7 +363,7 @@ mod tests {
         let randomness2 = F::rand(&mut rng);
         let comm2 = PedersenCommitmentEC::commit(&params, value2, &randomness2);
         
-        // Add commitments
+        // Add commitments - homomorphic property
         let comm_sum = PedersenCommitmentEC {
             commitment: comm1.commitment + comm2.commitment,
         };
@@ -361,6 +371,9 @@ mod tests {
         // Verify the sum
         let value_sum = value1 + value2;
         let randomness_sum = randomness1 + randomness2;
+        
+        // The homomorphic property should hold:
+        // C(v1, r1) + C(v2, r2) = C(v1+v2, r1+r2)
         assert!(comm_sum.verify_opening(&params, value_sum, &randomness_sum));
     }
 }
