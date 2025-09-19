@@ -9,7 +9,6 @@ use ark_r1cs_std::{
     fields::fp::FpVar,
     groups::CurveVar,
     prelude::*,
-    ToBitsGadget,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
@@ -30,7 +29,7 @@ impl SchnorrGadget {
         // Get the canonical little-endian bit representation of the base field element
         let bits = fq.to_bits_le()?;
         // Pack these bits into the scalar field Fr
-        Boolean::le_bits_to_fp_var(&bits)
+        Boolean::le_bits_to_fp(&bits)
     }
     
     /// Verify Schnorr signature with Jubjub curve point coordinates
@@ -56,8 +55,8 @@ impl SchnorrGadget {
         let c = poseidon_hash_zk(&hash_inputs)?;
 
         // Fixed generator
-        use ark_ec::Group;
-        let g = Jubjub::generator();
+        use ark_ec::PrimeGroup;
+        let g = <Jubjub as PrimeGroup>::generator();
         let g_var = JubjubVar::new_constant(cs.clone(), g)?;
 
         // Build PK and R as group points using the Fq coordinates

@@ -1,5 +1,5 @@
 use ark_bls12_381::Fr as F;
-use ark_ec::{AffineRepr, CurveGroup, Group};
+use ark_ec::{AffineRepr, CurveGroup, PrimeGroup};
 use ark_ed_on_bls12_381::{
     EdwardsProjective as Jubjub,
     Fq as JubjubFq,
@@ -52,13 +52,13 @@ impl PedersenParamsEC {
         let mut rng = rand::rngs::StdRng::from_seed(seed);
         
         // Generate G from the standard generator
-        let g = Jubjub::generator();
+        let g = <Jubjub as PrimeGroup>::generator();
         
         // Generate H by hashing a nothing-up-my-sleeve string
         // In production, this should come from a trusted setup ceremony
         let h_scalar = F::from_be_bytes_mod_order(b"FLUXE_PEDERSEN_H_GENERATOR_2024");
         // Use scalar multiplication via the Group trait
-        let g_gen = Jubjub::generator();
+        let g_gen = <Jubjub as PrimeGroup>::generator();
         let h = g_gen.mul_bigint(h_scalar.into_bigint());
         
         Self { g, h }

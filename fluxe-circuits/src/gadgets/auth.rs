@@ -1,5 +1,5 @@
 use ark_bls12_381::Fr as F;
-use ark_ec::Group;
+use ark_ec::PrimeGroup;
 use ark_ed_on_bls12_381::{
     constraints::{EdwardsVar as JubjubVar, FqVar},
     EdwardsProjective as Jubjub,
@@ -10,7 +10,6 @@ use ark_r1cs_std::{
     fields::fp::FpVar,
     groups::CurveVar,
     prelude::*,
-    ToBitsGadget,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
@@ -30,7 +29,7 @@ impl AuthGadget {
         // Get the canonical little-endian bit representation of the base field element
         let bits = fq.to_bits_le()?;
         // Pack these bits into the scalar field Fr
-        Boolean::le_bits_to_fp_var(&bits)
+        Boolean::le_bits_to_fp(&bits)
     }
     
     /// Verify EC-based authentication by deriving public key from secret key
@@ -73,7 +72,7 @@ impl AuthGadget {
         let bits = scalar.to_bits_le()?;
 
         // Constant generator
-        let g = Jubjub::generator();
+        let g = <Jubjub as PrimeGroup>::generator();
         let g_var = JubjubVar::new_constant(cs.clone(), g)?;
 
         // Variable-time scalar mul in-circuit (fixed-base windowed)
@@ -82,8 +81,8 @@ impl AuthGadget {
 
         // Optional on-curve check (Twisted Edwards):
         // For Ed25519-like curves r1cs_std ensures correctness, but we can still assert non-zero:
-        let not_identity = pk_var.is_zero()?.not();
-        not_identity.enforce_equal(&Boolean::TRUE)?;
+        let is_identity = pk_var.is_zero()?;
+        is_identity.enforce_equal(&Boolean::FALSE)?;
 
         // Return Fq coordinates directly without unsafe conversion
         Ok((pk_var.x.clone(), pk_var.y.clone()))
