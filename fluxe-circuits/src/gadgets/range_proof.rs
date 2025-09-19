@@ -6,6 +6,7 @@ use ark_r1cs_std::{
     prelude::*,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
+use ark_ec::AdditiveGroup;
 
 /// Range proof gadget for proving values are within specific bit ranges.
 /// 
@@ -33,7 +34,7 @@ impl RangeProofGadget {
         
         // Optional: Reconstruct and verify (for extra safety, though to_bits_le already ensures this)
         // This adds extra constraints but provides defense in depth
-        let reconstructed = Self::le_bits_to_fp_var(&value_bits[..bits.min(value_bits.len())])?;
+        let reconstructed = Self::le_bits_to_fp(&value_bits[..bits.min(value_bits.len())])?;
         
         // Create a mask for the valid bits
         let mask = if bits >= 254 {
@@ -54,7 +55,7 @@ impl RangeProofGadget {
     
     /// Helper function to reconstruct a field element from little-endian bits.
     /// Used internally for verification.
-    fn le_bits_to_fp_var(bits: &[Boolean<F>]) -> Result<FpVar<F>, SynthesisError> {
+    fn le_bits_to_fp(bits: &[Boolean<F>]) -> Result<FpVar<F>, SynthesisError> {
         let mut result = FpVar::<F>::zero();
         let mut power = F::one();
         
@@ -202,7 +203,7 @@ mod tests {
             let value_var = FpVar::new_witness(cs.clone(), || Ok(value)).unwrap();
             
             let bits = value_var.to_bits_le().unwrap();
-            let reconstructed = RangeProofGadget::le_bits_to_fp_var(&bits).unwrap();
+            let reconstructed = RangeProofGadget::le_bits_to_fp(&bits).unwrap();
             
             reconstructed.enforce_equal(&value_var).unwrap();
         }
