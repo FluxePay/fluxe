@@ -14,6 +14,7 @@ use ark_r1cs_std::{
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::poseidon::poseidon_hash_zk;
+use crate::gadgets::range_proof::RangeProofGadget;
 
 /// EC-based authentication gadget for Fluxe circuits
 /// Implements owner_addr = H(pk_x, pk_y) where pk is derived from sk
@@ -29,7 +30,7 @@ impl AuthGadget {
         // Get the canonical little-endian bit representation of the base field element
         let bits = fq.to_bits_le()?;
         // Pack these bits into the scalar field Fr
-        Boolean::le_bits_to_fp(&bits)
+        RangeProofGadget::le_bits_to_fp(&bits)
     }
     
     /// Verify EC-based authentication by deriving public key from secret key
@@ -101,19 +102,33 @@ impl AuthGadget {
     }
     
     /// Verify public key is valid (on curve check)
-    /// This would be critical in a production implementation
+    /// For Baby JubJub (Twisted Edwards curve): ax^2 + y^2 = 1 + dx^2y^2
     pub fn verify_public_key_valid(
         _cs: ConstraintSystemRef<F>,
-        _pk_x: &FpVar<F>,
-        _pk_y: &FpVar<F>,
+        pk_x: &FpVar<F>,
+        pk_y: &FpVar<F>,
     ) -> Result<Boolean<F>, SynthesisError> {
-        // In production: verify pk is on the elliptic curve
-        // For Baby Jubjub: x^2 + y^2 = 1 + d*x^2*y^2
-        // For short Weierstrass: y^2 = x^3 + ax + b
+        // Baby JubJub curve equation: ax^2 + y^2 = 1 + dx^2y^2
+        // where a = 168700 and d = 168696 for Baby JubJub over BLS12-381
         
-        // Simplified implementation always returns true
-        // Real implementation would check curve equation
-        Ok(Boolean::TRUE)
+        // Parameters for Baby JubJub (EdwardsProjective on BLS12-381)
+        let a = FpVar::constant(F::from(168700u64));
+        let d = FpVar::constant(F::from(168696u64));
+        let one = FpVar::one();
+        
+        // Compute x^2 and y^2
+        let x_squared = pk_x * pk_x;
+        let y_squared = pk_y * pk_y;
+        
+        // Compute left side: ax^2 + y^2
+        let left = &a * &x_squared + &y_squared;
+        
+        // Compute right side: 1 + dx^2y^2
+        let x2_y2 = &x_squared * &y_squared;
+        let right = &one + &d * &x2_y2;
+        
+        // Check if they're equal
+        left.is_eq(&right)
     }
     
     /// Alternative authentication using Ethereum-style addresses

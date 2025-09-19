@@ -9,6 +9,8 @@ use fluxe_core::{
 };
 
 use crate::gadgets::poseidon::poseidon_hash_zk;
+use crate::gadgets::range_proof::RangeProofGadget;
+use ark_r1cs_std::boolean::Boolean;
 
 /// Note variable for circuits
 #[derive(Clone)]
@@ -99,7 +101,7 @@ impl NoteVar {
         
         for byte in truncated_psi {
             let byte_bits = byte.to_bits_le()?;
-            let byte_value = Boolean::le_bits_to_fp(&byte_bits)?;
+            let byte_value = RangeProofGadget::le_bits_to_fp(&byte_bits)?;
             psi_field += &byte_value * &multiplier;
             multiplier *= &two_five_six;
         }
@@ -146,7 +148,7 @@ impl NoteVar {
         
         for byte in truncated_psi {
             let byte_bits = byte.to_bits_le()?;
-            let byte_value = Boolean::le_bits_to_fp(&byte_bits)?;
+            let byte_value = RangeProofGadget::le_bits_to_fp(&byte_bits)?;
             psi_field += &byte_value * &multiplier;
             multiplier *= &two_five_six;
         }

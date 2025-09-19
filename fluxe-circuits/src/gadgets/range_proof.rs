@@ -54,8 +54,8 @@ impl RangeProofGadget {
     }
     
     /// Helper function to reconstruct a field element from little-endian bits.
-    /// Used internally for verification.
-    fn le_bits_to_fp(bits: &[Boolean<F>]) -> Result<FpVar<F>, SynthesisError> {
+    /// Used internally for verification and by other gadgets.
+    pub fn le_bits_to_fp(bits: &[Boolean<F>]) -> Result<FpVar<F>, SynthesisError> {
         let mut result = FpVar::<F>::zero();
         let mut power = F::one();
         

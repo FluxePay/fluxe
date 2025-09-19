@@ -13,6 +13,7 @@ use ark_r1cs_std::{
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::poseidon::poseidon_hash_zk;
+use crate::gadgets::range_proof::RangeProofGadget;
 
 /// Schnorr verification gadget on Jubjub curve
 /// 
@@ -29,7 +30,7 @@ impl SchnorrGadget {
         // Get the canonical little-endian bit representation of the base field element
         let bits = fq.to_bits_le()?;
         // Pack these bits into the scalar field Fr
-        Boolean::le_bits_to_fp(&bits)
+        RangeProofGadget::le_bits_to_fp(&bits)
     }
     
     /// Verify Schnorr signature with Jubjub curve point coordinates
