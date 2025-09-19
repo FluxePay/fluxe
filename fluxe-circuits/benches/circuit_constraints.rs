@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use ark_bls12_381::{Bls12_381, Fr as F};
+use ark_bls12_381::Fr as F;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem};
 use ark_ff::UniformRand;
 use ark_std::rand::{RngCore, SeedableRng};
@@ -94,15 +94,26 @@ fn create_burn_circuit<R: RngCore>(rng: &mut R) -> BurnCircuit {
         leaf: note_in.commitment(),
     };
     
+    let exit_receipt_clone = exit_receipt.clone();
+    
     BurnCircuit {
         note_in,
         value_in: value,
         value_randomness_in: randomness,
         owner_sk: F::rand(rng),
+        owner_pk_x: F::rand(rng),
+        owner_pk_y: F::rand(rng),
         nk: F::rand(rng),
         cm_path: path,
         nf_nonmembership: None, // Simplified for benchmarking
+        nf_insert_witness: None, // Simplified for benchmarking
         exit_receipt,
+        exit_append_witness: fluxe_core::merkle::AppendWitness {
+            leaf_index: 0,
+            leaf: exit_receipt_clone.hash(),
+            pre_siblings: vec![F::from(0u64); 16],
+            height: 16,
+        },
         cmt_root: F::rand(rng),
         nft_root_old: F::rand(rng),
         nft_root_new: F::rand(rng),
@@ -180,10 +191,19 @@ fn create_transfer_circuit<R: RngCore>(rng: &mut R, num_inputs: usize, num_outpu
         values_out,
         value_randomness_out,
         nks,
+        owner_sks: vec![F::rand(rng); num_inputs],
+        owner_pks: vec![(F::rand(rng), F::rand(rng)); num_inputs],
         cm_paths,
         nf_nonmembership_proofs: vec![None; num_inputs], // Simplified for benchmarking
         sanctions_nm_proofs_in: vec![None; num_inputs],
         sanctions_nm_proofs_out: vec![None; num_outputs],
+        cmt_paths_out: vec![],
+        nf_nonmembership: vec![None; num_inputs],
+        source_pool_policies: vec![],
+        dest_pool_policies: vec![],
+        pool_policy_paths: vec![],
+        cmt_appends_out: vec![],
+        nf_insert_witnesses: vec![],
         cmt_root_old: F::rand(rng),
         cmt_root_new: F::rand(rng),
         nft_root_old: F::rand(rng),
@@ -228,6 +248,7 @@ fn create_object_update_circuit<R: RngCore>(rng: &mut R) -> ObjectUpdateCircuit 
         state_new,
         callback_entry: None,
         callback_invocation: None,
+        callback_signature: None,
         cb_path: None,
         cb_nonmembership: None,
         obj_path_old,
