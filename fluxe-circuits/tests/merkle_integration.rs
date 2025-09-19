@@ -6,7 +6,7 @@ use ark_std::rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 
 use fluxe_core::{
-    merkle::{IncrementalTree, SortedTree, MerklePath, RangePath},
+    merkle::{IncrementalTree, SortedTree, MerklePath, RangePath, AppendWitness},
     data_structures::{Note, ExitReceipt, ComplianceState},
     crypto::{
         pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness},
@@ -168,6 +168,14 @@ fn test_burn_with_nonmembership_proof() {
     let binding = poseidon_hash(&[exit_root_old, exit_hash, append_index]);
     let exit_root_new = poseidon_hash(&[binding, exit_hash]);
     
+    // Create exit append witness
+    let exit_append_witness = AppendWitness {
+        leaf_index: 0,
+        leaf: exit_hash,
+        pre_siblings: vec![F::from(0u64); 32],
+        height: 32,
+    };
+    
     let circuit = BurnCircuit {
         note_in: note,
         value_in: value,
@@ -180,6 +188,7 @@ fn test_burn_with_nonmembership_proof() {
         nf_nonmembership: Some(nm_proof),
         nf_insert_witness: Some(insert_witness),
         exit_receipt,
+        exit_append_witness,
         cmt_root: cmt_tree.root(),
         nft_root_old,
         nft_root_new,
@@ -299,6 +308,14 @@ fn test_minimal_burn() {
     let binding = poseidon_hash(&[exit_root_old, exit_hash, append_index]);
     let exit_root_new = poseidon_hash(&[binding, exit_hash]);
     
+    // Create exit append witness
+    let exit_append_witness = AppendWitness {
+        leaf_index: 0,
+        leaf: exit_hash,
+        pre_siblings: vec![F::from(0u64); 32],
+        height: 32,
+    };
+    
     // Create burn circuit
     let circuit = BurnCircuit {
         note_in: note,
@@ -312,6 +329,7 @@ fn test_minimal_burn() {
         nf_nonmembership: Some(nm_proof),
         nf_insert_witness: Some(insert_witness),
         exit_receipt,
+        exit_append_witness,
         cmt_root: cmt_tree.root(),
         nft_root_old,
         nft_root_new,

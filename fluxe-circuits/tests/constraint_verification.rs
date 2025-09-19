@@ -1,7 +1,7 @@
 use ark_bls12_381::Fr as F;
 use ark_ff::UniformRand;
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
-use ark_std::rand::SeedableRng;
+use ark_std::rand::{SeedableRng, Rng};
 use rand_chacha::ChaCha20Rng;
 
 use fluxe_core::{
@@ -337,12 +337,18 @@ fn test_simple_1in_1out() {
     let (pk_x, pk_y) = compute_ec_public_key(owner_sk);
     let owner_addr = poseidon_hash(&[pk_x, pk_y]);
     
+    // Generate random psi for the note
+    let mut psi = [0u8; 32];
+    for byte in psi.iter_mut() {
+        *byte = rng.gen();
+    }
+    
     let randomness_in = F::rand(&mut rng);
     let mut note_in = Note::new(
         1,
         PedersenCommitment::commit(&params, 500u64, &PedersenRandomness { r: randomness_in }),
         owner_addr,
-        [0u8; 32],
+        psi,
         1
     );
     note_in.compliance_hash = F::from(1u64);
@@ -355,12 +361,17 @@ fn test_simple_1in_1out() {
     let path = cmt_tree.get_path(0).unwrap();
     
     // Create output note
+    let mut psi_out = [0u8; 32];
+    for byte in psi_out.iter_mut() {
+        *byte = rng.gen();
+    }
+    
     let randomness_out = F::rand(&mut rng);
     let mut note_out = Note::new(
         1,
         PedersenCommitment::commit(&params, 495u64, &PedersenRandomness { r: randomness_out }),
         F::rand(&mut rng),
-        [0u8; 32],
+        psi_out,
         1
     );
     note_out.compliance_hash = F::from(1u64);
@@ -434,6 +445,16 @@ fn test_simple_1in_1out() {
     // Test circuit
     let cs = ConstraintSystem::<F>::new_ref();
     circuit.generate_constraints(cs.clone()).expect("Constraint generation should succeed");
+    
+    if !cs.is_satisfied().unwrap() {
+        println!("Constraint system is not satisfied!");
+        println!("Number of constraints: {}", cs.num_constraints());
+        println!("Number of public inputs: {}", cs.num_instance_variables());
+        println!("Number of private inputs: {}", cs.num_witness_variables());
+        
+        // Print which constraint(s) are failing by checking satisfaction
+        println!("Checking constraint satisfaction...");
+    }
     
     assert!(cs.is_satisfied().unwrap(), "Simple 1-in 1-out should be satisfied");
     println!("✓ Simple 1-in 1-out verified");

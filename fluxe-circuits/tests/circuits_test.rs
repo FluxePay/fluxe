@@ -244,6 +244,14 @@ fn test_burn_circuit_basic() {
     // Generate proper insertion witness
     let insert_witness = generate_test_insert_witness(nf, 32);
     
+    // Create exit append witness
+    let exit_append_witness = AppendWitness {
+        leaf_index: 0,
+        leaf: exit_receipt.hash(),
+        pre_siblings: vec![F::from(0u64); 32],
+        height: 32,
+    };
+    
     // Create circuit
     let circuit = BurnCircuit::new(
         note_in,
@@ -257,6 +265,7 @@ fn test_burn_circuit_basic() {
         Some(nm_proof), // nf_nonmembership
         Some(insert_witness), // nf_insert_witness
         exit_receipt,
+        exit_append_witness,
         F::rand(&mut rng), // cmt_root
         F::rand(&mut rng), // nft_root_old
         F::rand(&mut rng), // nft_root_new
