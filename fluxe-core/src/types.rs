@@ -63,6 +63,12 @@ pub struct Supply {
     pub burned_total: Amount,
 }
 
+impl Default for Supply {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Supply {
     pub fn new() -> Self {
         Self {
@@ -108,6 +114,12 @@ pub struct StateRoots {
     pub exit_root: MerkleRoot,
     pub sanctions_root: MerkleRoot,
     pub pool_rules_root: MerkleRoot,
+}
+
+impl Default for StateRoots {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StateRoots {

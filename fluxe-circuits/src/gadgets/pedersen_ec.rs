@@ -245,7 +245,7 @@ impl PedersenRangeProof {
         
         // Then verify the value is in range
         use crate::gadgets::range_proof::RangeProofGadget;
-        RangeProofGadget::prove_range(cs, value, bits)?;
+        RangeProofGadget::prove_range_bits(cs, value, bits)?;
         
         Ok(())
     }

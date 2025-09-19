@@ -56,8 +56,8 @@ impl PedersenParams {
                     // Hash the point coordinates to get a new scalar
                     let mut mixer = Blake2b512::new();
                     mixer.update(b"FLUXE_H_MIXER");
-                    mixer.update(&point.x.to_string().as_bytes());
-                    mixer.update(&point.y.to_string().as_bytes());
+                    mixer.update(point.x.to_string().as_bytes());
+                    mixer.update(point.y.to_string().as_bytes());
                     let mix_hash = mixer.finalize();
                     
                     if let Some(mix_scalar) = F::from_random_bytes(&mix_hash[..31]) {

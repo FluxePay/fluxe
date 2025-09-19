@@ -35,6 +35,12 @@ pub struct ComplianceState {
     pub rep_hash: F,
 }
 
+impl Default for ComplianceState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ComplianceState {
     /// Create a new default compliance state
     pub fn new() -> Self {

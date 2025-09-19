@@ -238,7 +238,7 @@ impl ConstraintSynthesizer<F> for TransferCircuit {
         // Constraint 4: Range proofs for output values
         use crate::gadgets::range_proof::RangeProofGadget;
         for note_var in &notes_out_var {
-            RangeProofGadget::prove_range(cs.clone(), &note_var.value, 64)?;
+            RangeProofGadget::prove_range_bits(cs.clone(), &note_var.value, 64)?;
         }
         
         // Constraint 5: Non-membership of nullifiers in NFT_ROOT_old
@@ -323,13 +323,13 @@ impl ConstraintSynthesizer<F> for TransferCircuit {
             // Pool ID must be non-zero and fit in 32 bits
             let pool_nonzero = note_in.pool_id.is_neq(&FpVar::zero())?;
             pool_nonzero.enforce_equal(&Boolean::TRUE)?;
-            RangeProofGadget::prove_range(cs.clone(), &note_in.pool_id, 32)?;
+            RangeProofGadget::prove_range_bits(cs.clone(), &note_in.pool_id, 32)?;
         }
         
         for note_out in &notes_out_var {
             let pool_nonzero = note_out.pool_id.is_neq(&FpVar::zero())?;
             pool_nonzero.enforce_equal(&Boolean::TRUE)?;
-            RangeProofGadget::prove_range(cs.clone(), &note_out.pool_id, 32)?;
+            RangeProofGadget::prove_range_bits(cs.clone(), &note_out.pool_id, 32)?;
         }
         
         // Verify cross-pool transfers are allowed

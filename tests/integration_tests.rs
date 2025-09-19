@@ -124,7 +124,7 @@ fn test_range_proof_gadgets() {
     let value = 1000u64;
     let value_var = FpVar::new_witness(cs.clone(), || Ok(F::from(value))).unwrap();
     
-    RangeProofGadget::prove_range(cs.clone(), &value_var, 64).unwrap();
+    RangeProofGadget::prove_range_bits(cs.clone(), &value_var, 64).unwrap();
     assert!(cs.is_satisfied().unwrap());
     println!("✓ Basic range proof works");
     

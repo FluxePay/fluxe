@@ -206,6 +206,12 @@ pub struct AttestationRegistry {
     revoked: Vec<F>,
 }
 
+impl Default for AttestationRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AttestationRegistry {
     pub fn new() -> Self {
         Self {
@@ -294,6 +300,12 @@ impl AttestationRegistry {
 /// Attestation aggregator for batch verification
 pub struct AttestationAggregator {
     attestations: Vec<SignedAttestation>,
+}
+
+impl Default for AttestationAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AttestationAggregator {

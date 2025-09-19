@@ -53,7 +53,7 @@ pub fn blake2b_kdf(secret: &[u8], info: &[u8], output_len: usize) -> Vec<u8> {
     while output.len() < output_len {
         let mut hasher = Blake2b512::new();
         hasher.update(secret);
-        hasher.update(&counter.to_le_bytes());
+        hasher.update(counter.to_le_bytes());
         hasher.update(info);
         
         let hash = hasher.finalize();

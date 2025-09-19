@@ -170,7 +170,7 @@ impl TransactionBatch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_relations::r1cs::{ConstraintSystem, ConstraintSystemRef, SynthesisError, ConstraintSynthesizer};
+    use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError, ConstraintSynthesizer};
 
     #[derive(Clone)]
     struct TestCircuit {

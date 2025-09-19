@@ -262,7 +262,7 @@ fn test_callback_chain_consistency() {
     let state = ComplianceState::new_verified(1);
     let mut obj1 = ZkObject::new(&state);
     let mut obj2 = ZkObject::new(&state);
-    let mut rng = thread_rng();
+    let rng = thread_rng();
     
     // Add same callbacks to both objects
     let callbacks: Vec<CallbackEntry> = (0..3).map(|i| {

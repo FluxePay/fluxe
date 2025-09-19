@@ -54,7 +54,7 @@ pub fn serialize_to_vec<T: CanonicalSerialize>(items: &[T]) -> Result<Vec<u8>, a
 
 /// Deserialize multiple elements from a byte vector
 pub fn deserialize_from_vec<T: CanonicalDeserialize>(data: &[u8], count: usize) -> Result<Vec<T>, ark_serialize::SerializationError> {
-    let mut cursor = &data[..];
+    let mut cursor = data;
     let mut result = Vec::with_capacity(count);
     
     for _ in 0..count {
@@ -131,8 +131,8 @@ pub fn pad_to_power_of_two<T: Clone>(vec: &mut Vec<T>, padding_value: T) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_ff::UniformRand;
-    use rand::thread_rng;
+    
+    
 
     #[test]
     fn test_field_conversions() {

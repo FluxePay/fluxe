@@ -382,7 +382,7 @@ mod tests {
     #[test]
     fn test_tree_consistency() {
         let mut tree = IncrementalTree::new(3);
-        let mut rng = thread_rng();
+        let rng = thread_rng();
         
         // Add maximum leaves
         for i in 0..8 {

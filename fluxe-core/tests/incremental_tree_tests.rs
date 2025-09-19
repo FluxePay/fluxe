@@ -35,7 +35,7 @@ fn test_single_leaf() {
 #[test]
 fn test_sequential_append() {
     let mut tree = IncrementalTree::new(3); // Max 8 leaves
-    let mut rng = thread_rng();
+    let rng = thread_rng();
     let params = TreeParams::new(3);
     
     let mut leaves = Vec::new();

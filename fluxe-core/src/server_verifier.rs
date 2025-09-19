@@ -377,8 +377,8 @@ impl TransactionBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::pedersen::{PedersenCommitment, PedersenParams, PedersenRandomness};
-    use ark_ff::UniformRand;
+    
+    
     use rand::thread_rng;
 
     // Mock setup for testing
