@@ -99,7 +99,7 @@ impl NoteVar {
         
         for byte in truncated_psi {
             let byte_bits = byte.to_bits_le()?;
-            let byte_value = Boolean::le_bits_to_fp_var(&byte_bits)?;
+            let byte_value = Boolean::le_bits_to_fp(&byte_bits)?;
             psi_field += &byte_value * &multiplier;
             multiplier *= &two_five_six;
         }
@@ -146,7 +146,7 @@ impl NoteVar {
         
         for byte in truncated_psi {
             let byte_bits = byte.to_bits_le()?;
-            let byte_value = Boolean::le_bits_to_fp_var(&byte_bits)?;
+            let byte_value = Boolean::le_bits_to_fp(&byte_bits)?;
             psi_field += &byte_value * &multiplier;
             multiplier *= &two_five_six;
         }
