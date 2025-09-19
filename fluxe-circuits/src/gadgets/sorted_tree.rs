@@ -49,9 +49,9 @@ impl SortedLeafVar {
         
         let next_is_zero = self.next_key.is_eq(&FpVar::zero())?;
         let value_lt_next = ComparisonGadget::is_less_than(cs, value, &self.next_key)?;
-        let next_check = next_is_zero.or(&value_lt_next)?;
+        let next_check = &next_is_zero | &value_lt_next;
         
-        value_gt_key.and(&next_check)
+        Ok(&value_gt_key & &next_check)
     }
 }
 
@@ -88,7 +88,7 @@ impl RangePathVar {
         // 2. Verify target is in gap
         let in_gap = self.low_leaf.contains_gap(&self.target)?;
         
-        path_valid.and(&in_gap)
+        Ok(&path_valid & &in_gap)
     }
     
     /// Enforce that this is a valid non-membership proof

@@ -196,10 +196,7 @@ impl SimtInsertVar {
         let structure_valid = self.verify_structural_update()?;
         
         // All conditions must hold
-        let all_valid = nonmem_valid
-            .and(&target_matches)?
-            .and(&linking_valid)?
-            .and(&structure_valid)?;
+        let all_valid = &(&(&nonmem_valid & &target_matches) & &linking_valid) & &structure_valid;
         
         Ok(all_valid)
     }
@@ -239,7 +236,7 @@ impl SimtInsertVar {
             std::cmp::Ordering::Less,
             false,
         )?;
-        let gap_valid = next_key_is_zero.or(&target_lt_next)?;
+        let gap_valid = &next_key_is_zero | &target_lt_next;
         
         // Check that the new leaf's key matches the insertion target
         let new_key_matches_target = self.new_leaf.key.is_eq(&self.target)?;
@@ -248,13 +245,7 @@ impl SimtInsertVar {
         // (It should be the index where the new leaf is being inserted)
         // This is implicitly checked by path verification
         
-        pred_next_key_correct
-            .and(&new_leaf_next_key_correct)?
-            .and(&new_leaf_next_index_correct)?
-            .and(&pred_key_unchanged)?
-            .and(&target_gt_pred)?
-            .and(&gap_valid)?
-            .and(&new_key_matches_target)
+        Ok(&(&(&(&(&(&pred_next_key_correct & &new_leaf_next_key_correct) & &new_leaf_next_index_correct) & &pred_key_unchanged) & &target_gt_pred) & &gap_valid) & &new_key_matches_target)
     }
     
     /// Verify the structural updates correctly transform old_root to new_root
@@ -281,11 +272,7 @@ impl SimtInsertVar {
         let pred_path_leaf_matches = self.pred_update_path.leaf.is_eq(&pred_leaf_hash)?;
         
         // All structural checks must pass
-        old_root_valid
-            .and(&new_root_valid)?
-            .and(&pred_path_height_valid)?
-            .and(&new_path_height_valid)?
-            .and(&pred_path_leaf_matches)
+        Ok(&(&(&(&old_root_valid & &new_root_valid) & &pred_path_height_valid) & &new_path_height_valid) & &pred_path_leaf_matches)
     }
 }
 
