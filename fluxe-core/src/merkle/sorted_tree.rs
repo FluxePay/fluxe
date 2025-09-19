@@ -1,6 +1,6 @@
 use super::{MerklePath, MerkleTree, RangePath, SortedLeaf, SortedInsertWitness, TreeParams};
 use ark_bls12_381::Fr as F;
-use ark_ff::{Zero, BigInteger, PrimeField};
+use ark_ff::{Zero, PrimeField};
 // use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::cmp::Ordering;
@@ -123,7 +123,7 @@ impl SortedTree {
         
         // First get non-membership proof before any modifications
         let range_proof = self.prove_non_membership(key)?;
-        let old_root = self.root;
+        let _old_root = self.root;
         
         // Store original predecessor leaf and its path
         let (_pred_key, pred_idx) = self.find_predecessor(&key);
@@ -154,7 +154,7 @@ impl SortedTree {
             .ok_or("Could not get path for new leaf")?;
         
         // Get the updated path for predecessor (after insertion)
-        let pred_path_after = self.get_path(pred_idx)
+        let _pred_path_after = self.get_path(pred_idx)
             .ok_or("Could not get updated predecessor path")?;
         
         // The witness should use:
@@ -506,8 +506,8 @@ pub type SanctionsTree = SortedTree;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_ff::UniformRand;
-    use rand::thread_rng;
+    
+    
 
     #[test]
     fn test_sorted_tree_insert() {

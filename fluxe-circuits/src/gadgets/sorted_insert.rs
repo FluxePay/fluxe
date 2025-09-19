@@ -48,7 +48,7 @@ impl SortedInsertWitness {
     /// Compute the root before insertion
     pub fn compute_old_root(&self, params: &TreeParams) -> F {
         // The old root is what the range proof verifies against
-        let pred_leaf_hash = self.range_proof.low_leaf.hash();
+        let _pred_leaf_hash = self.range_proof.low_leaf.hash();
         self.range_proof.low_path.compute_root(params)
     }
     
@@ -77,7 +77,7 @@ impl SortedInsertWitness {
     /// Apply a leaf update to compute new root
     fn apply_leaf_update(
         &self,
-        old_root: F,
+        _old_root: F,
         path: &MerklePath,
         new_leaf_hash: F,
         params: &TreeParams,
@@ -100,7 +100,7 @@ impl SortedInsertWitness {
     /// Apply a leaf insertion to compute new root
     fn apply_leaf_insert(
         &self,
-        old_root: F,
+        _old_root: F,
         path: &MerklePath,
         new_leaf_hash: F,
         params: &TreeParams,
@@ -281,11 +281,11 @@ impl SimtInsertVar {
         let pred_path_leaf_matches = self.pred_update_path.leaf.is_eq(&pred_leaf_hash)?;
         
         // All structural checks must pass
-        Ok(old_root_valid
+        old_root_valid
             .and(&new_root_valid)?
             .and(&pred_path_height_valid)?
             .and(&new_path_height_valid)?
-            .and(&pred_path_leaf_matches)?)
+            .and(&pred_path_leaf_matches)
     }
 }
 
@@ -294,12 +294,12 @@ mod tests {
     use super::*;
     use ark_relations::r1cs::ConstraintSystem;
     use fluxe_core::merkle::{SortedTree, TreeParams};
-    use ark_ff::UniformRand;
+    
     use rand::thread_rng;
 
     #[test]
     fn test_sorted_insert_witness() {
-        let mut rng = thread_rng();
+        let rng = thread_rng();
         let mut tree = SortedTree::new(4);
         let params = TreeParams::new(4);
         
@@ -354,7 +354,7 @@ mod tests {
     
     #[test]
     fn test_sorted_insert_gadget() {
-        let mut rng = thread_rng();
+        let rng = thread_rng();
         let cs = ConstraintSystem::<F>::new_ref();
         let mut tree = SortedTree::new(4);
         

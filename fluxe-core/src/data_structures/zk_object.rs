@@ -67,7 +67,7 @@ impl ZkObject {
     }
 
     /// Check if object is valid for spending
-    pub fn can_spend(&self, state: &ComplianceState, current_time: Time) -> Result<(), String> {
+    pub fn can_spend(&self, state: &ComplianceState, _current_time: Time) -> Result<(), String> {
         // Verify state hash matches
         if self.state_hash != state.hash() {
             return Err("State hash mismatch".to_string());
