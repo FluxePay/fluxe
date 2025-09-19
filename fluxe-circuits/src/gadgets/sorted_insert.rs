@@ -196,9 +196,10 @@ impl SimtInsertVar {
         let structure_valid = self.verify_structural_update()?;
         
         // All conditions must hold
-        let all_valid = &(&(&nonmem_valid & &target_matches) & &linking_valid) & &structure_valid;
+        // result = nonmem_valid AND target_matches AND linking_valid AND structure_valid
+        let result = &(&(&nonmem_valid & &target_matches) & &linking_valid) & &structure_valid;
         
-        Ok(all_valid)
+        Ok(result)
     }
     
     /// Enforce that this is a valid insert proof
@@ -236,6 +237,7 @@ impl SimtInsertVar {
             std::cmp::Ordering::Less,
             false,
         )?;
+        // gap_valid = next_key_is_zero OR target_lt_next
         let gap_valid = &next_key_is_zero | &target_lt_next;
         
         // Check that the new leaf's key matches the insertion target
@@ -245,7 +247,10 @@ impl SimtInsertVar {
         // (It should be the index where the new leaf is being inserted)
         // This is implicitly checked by path verification
         
-        Ok(&(&(&(&(&(&pred_next_key_correct & &new_leaf_next_key_correct) & &new_leaf_next_index_correct) & &pred_key_unchanged) & &target_gt_pred) & &gap_valid) & &new_key_matches_target)
+        // Combine all linking checks with AND operations
+        let result = &(&(&(&(&(&pred_next_key_correct & &new_leaf_next_key_correct) & &new_leaf_next_index_correct) & &pred_key_unchanged) & &target_gt_pred) & &gap_valid) & &new_key_matches_target;
+        
+        Ok(result)
     }
     
     /// Verify the structural updates correctly transform old_root to new_root
@@ -272,7 +277,10 @@ impl SimtInsertVar {
         let pred_path_leaf_matches = self.pred_update_path.leaf.is_eq(&pred_leaf_hash)?;
         
         // All structural checks must pass
-        Ok(&(&(&(&old_root_valid & &new_root_valid) & &pred_path_height_valid) & &new_path_height_valid) & &pred_path_leaf_matches)
+        // result = old_root_valid AND new_root_valid AND pred_path_height_valid AND new_path_height_valid AND pred_path_leaf_matches
+        let result = &(&(&(&old_root_valid & &new_root_valid) & &pred_path_height_valid) & &new_path_height_valid) & &pred_path_leaf_matches;
+        
+        Ok(result)
     }
 }
 
