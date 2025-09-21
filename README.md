@@ -480,6 +480,10 @@ Your client must:
 
 ## References
 
+- zk-promises paper: https://eprint.iacr.org/2024/1260
+- Payy Network (UTXO model, sparse Merkle trees)
+- Tornado Cash (note/nullifier model)
+- Aztec Protocol (privacy primitives)
 - Arkworks libraries: algebraic structures, SNARKs, and R1CS gadgets (used extensively throughout).
 - Poseidon hash: algebraic sponge construction (consistent param gen in both native & circuit).
 - Pedersen commitments: homomorphic EC commitments (real in core and EC gadget, simplified version for demos).
