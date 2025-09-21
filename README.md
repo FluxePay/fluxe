@@ -374,7 +374,7 @@ Your client must:
 - Hashes are of the form `H(x₁, x₂, …) := Poseidonᵣ=8(x₁, x₂, …)`.
 
 ### Note Commitment
-- (```math
+```math
   cm = H( DOM_NOTE,
            asset_type,
            v_comm_x,
@@ -386,16 +386,16 @@ Your client must:
            pool_id,
            callbacks_hash,
            memo_hash )
-  ```)
+```
 - `ψ_field` is the 31-byte truncation/packing of `psi` (see `bytes_to_field`). Circuit reconstructs `ψ_field` by **bit packing** (RangeProofGadget::le_bits_to_fp) — this ensures native and circuit conversions match exactly.
 
 ### Nullifier
-- (```math
+```math
   nf = H( DOM_NF,
           nk,
           ψ_field,
           cm )
-  ```)
+```
 - `nk` (nullifier key) is private; knowledge prevents others from synthesizing valid spends.
 
 ### Sorted-Tree Non-Membership (Gap Proof)
