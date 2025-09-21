@@ -17,11 +17,10 @@
 - [Project Layout](#project-layout)
 - [Build, Run, and Benchmarks](#build-run-and-benchmarks)
 - [Integration Guide](#integration-guide)
-- [Math Details](#math-details)
+- [Protcol Details](#protocol-details)
 - [Security Notes & Limitations](#security-notes--limitations)
 - [Testing Tips](#testing-tips)
 - [References](#references)
-- [License](#license)
 
 ---
 
@@ -218,7 +217,7 @@ Key flows:
 
 - File: `fluxe-api/src/api.rs`
 - Endpoints (preview; proof deserialization is stubbed in this version):
-  - [[[http
+  - ```http
     POST /submit/mint
     POST /submit/burn
     POST /submit/transfer
@@ -237,7 +236,7 @@ Key flows:
 
     GET  /health
     GET  /info
-  ]]]
+  ```
 - JSON request models mirror core types with hex encoding for public inputs and field elements where relevant.
 
 ---
@@ -270,19 +269,19 @@ Key flows:
 
 ### Build
 - **All crates**
-  - [[[sh
+  - ```sh
     cd fluxe-circuits
     cargo build --workspace
-  ]]]
+  ```
 - **With parallel features (default)**:
   - Arkworks parallel feature is enabled in `Cargo.toml` features `parallel`.
 
 ### Run the API
-- [[[sh
+- ```sh
   cd fluxe-circuits/fluxe-api
   cargo run --release
   # Server binds to the configured address in code (e.g., 127.0.0.1:3000)
-]]]
+```
 
 **Notes**:
 - Proof parsing in `api.rs` is currently a placeholder (`parse_proof_from_bytes` returns `Err`).
@@ -290,12 +289,12 @@ Key flows:
 
 ### Benchmarks
 - Constraint counts, client proving, and verification:
-  - [[[sh
+  - ```sh
     cd fluxe-circuits/fluxe-circuits
     cargo bench --bench circuit_constraints
     cargo bench --bench proof_generation
     cargo bench --bench proof_verification
-  ]]]
+  ```
 
 The benches use `criterion` and print constraint growth, proving times, and verification performance. They include simplified circuits and small trees (e.g., height 16) for speed.
 
@@ -306,7 +305,7 @@ The benches use `criterion` and print constraint growth, proving times, and veri
 ### 1) Generate Trusted Setup (Groth16) Keys
 The project ships helpers to generate per-circuit proving/verifying keys:
 
-- [[[rust
+- ```rust
   use fluxe_circuits::setup::{SetupManager, CircuitType, test_rng};
 
   let mut rng = test_rng();
@@ -321,7 +320,7 @@ The project ships helpers to generate per-circuit proving/verifying keys:
   // Load later
   let mut mgr2 = SetupManager::new();
   mgr2.load_all(&dir).unwrap();
-]]]
+```
 
 *Tip*: In production, use a secure MPC or universal setup and **never** keep the toxic waste.
 
@@ -343,7 +342,7 @@ Your client must:
 - Prove with `CircuitSetup::prove`.
 - Send proof bytes + hex-encoded public inputs to the API (extend `parse_proof_from_bytes()` in `api.rs` to deserialize).
 
-- [[[json
+- ```json
   POST /submit/transfer
   {
     "nullifiers": ["0x...","0x..."],
@@ -357,7 +356,7 @@ Your client must:
       "pool_id": 1
     }]
   }
-]]]
+```
 
 ### 4) Batch Processing
 - The server accumulates `VerifiedTransaction`s and applies them deterministically on `POST /batch/process`.
@@ -375,7 +374,7 @@ Your client must:
 - Hashes are of the form `H(x₁, x₂, …) := Poseidonᵣ=8(x₁, x₂, …)`.
 
 ### Note Commitment
-- ([[[math
+- (```math
   cm = H( DOM_NOTE,
            asset_type,
            v_comm_x,
@@ -387,16 +386,16 @@ Your client must:
            pool_id,
            callbacks_hash,
            memo_hash )
-  ]]])
+  ```)
 - `ψ_field` is the 31-byte truncation/packing of `psi` (see `bytes_to_field`). Circuit reconstructs `ψ_field` by **bit packing** (RangeProofGadget::le_bits_to_fp) — this ensures native and circuit conversions match exactly.
 
 ### Nullifier
-- ([[[math
+- (```math
   nf = H( DOM_NF,
           nk,
           ψ_field,
           cm )
-  ]]])
+  ```)
 - `nk` (nullifier key) is private; knowledge prevents others from synthesizing valid spends.
 
 ### Sorted-Tree Non-Membership (Gap Proof)
@@ -438,44 +437,44 @@ Your client must:
   - Inspect constraint counts & growth.
   - Validate proving/verification stubs with small circuits.
 - Unit tests exist across modules (crypto primitives, trees, gadgets). Run:
-  - [[[sh
+  - ```sh
     cargo test --workspace
-  ]]]
+  ```
 
 ---
 
 ## Example: End-to-End Developer Flow (Local)
 
 1) **Generate keys** for all circuits:
-   - [[[sh
+   - ```sh
      cd fluxe-circuits/fluxe-circuits
      cargo test -- fluxe_circuits::setup::tests::test_trusted_setup_generation --ignored
-   ]]]
+   ```
    Or directly call `SetupManager` in a small helper bin as shown earlier.
 
 2) **Build a sample transfer proof** (client app):
    - Build `TransferCircuit` witnesses (notes, paths, non-membership, append & insert witnesses).
    - Create public inputs vector using `circuit.public_inputs()`.
-   - [[[rust
+   - ```rust
      use fluxe_circuits::{transfer::TransferCircuit, circuits::CircuitSetup};
      // ... build circuit instance "circuit"
      let setup = CircuitSetup::setup(circuit.clone(), &mut rng)?;
      let proof = setup.prove(circuit.clone(), &mut rng)?;
      let public_inputs = circuit.public_inputs();
      // serialize proof + inputs; submit to API
-   ]]]
+   ```
 
 3) **Run the API** and **submit**:
-   - [[[sh
+   - ```sh
      cd fluxe-circuits/fluxe-api
      cargo run --release
-   ]]]
+   ```
    - Submit to `/submit/transfer` (ensure you wired `parse_proof_from_bytes`).
 
 4) **Process a batch**:
-   - [[[sh
+   - ```sh
      curl -X POST http://127.0.0.1:3000/batch/process
-   ]]]
+   ```
 
 ---
 
