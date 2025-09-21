@@ -217,7 +217,7 @@ Key flows:
 
 - File: `fluxe-api/src/api.rs`
 - Endpoints (preview; proof deserialization is stubbed in this version):
-  - ```http
+  ```http
     POST /submit/mint
     POST /submit/burn
     POST /submit/transfer
@@ -269,7 +269,7 @@ Key flows:
 
 ### Build
 - **All crates**
-  - ```sh
+  ```sh
     cd fluxe-circuits
     cargo build --workspace
   ```
@@ -277,7 +277,7 @@ Key flows:
   - Arkworks parallel feature is enabled in `Cargo.toml` features `parallel`.
 
 ### Run the API
-- ```sh
+```sh
   cd fluxe-circuits/fluxe-api
   cargo run --release
   # Server binds to the configured address in code (e.g., 127.0.0.1:3000)
@@ -289,7 +289,7 @@ Key flows:
 
 ### Benchmarks
 - Constraint counts, client proving, and verification:
-  - ```sh
+  ```sh
     cd fluxe-circuits/fluxe-circuits
     cargo bench --bench circuit_constraints
     cargo bench --bench proof_generation
@@ -305,7 +305,7 @@ The benches use `criterion` and print constraint growth, proving times, and veri
 ### 1) Generate Trusted Setup (Groth16) Keys
 The project ships helpers to generate per-circuit proving/verifying keys:
 
-- ```rust
+```rust
   use fluxe_circuits::setup::{SetupManager, CircuitType, test_rng};
 
   let mut rng = test_rng();
@@ -342,7 +342,7 @@ Your client must:
 - Prove with `CircuitSetup::prove`.
 - Send proof bytes + hex-encoded public inputs to the API (extend `parse_proof_from_bytes()` in `api.rs` to deserialize).
 
-- ```json
+```json
   POST /submit/transfer
   {
     "nullifiers": ["0x...","0x..."],
@@ -437,7 +437,7 @@ Your client must:
   - Inspect constraint counts & growth.
   - Validate proving/verification stubs with small circuits.
 - Unit tests exist across modules (crypto primitives, trees, gadgets). Run:
-  - ```sh
+  ```sh
     cargo test --workspace
   ```
 
@@ -446,7 +446,7 @@ Your client must:
 ## Example: End-to-End Developer Flow (Local)
 
 1) **Generate keys** for all circuits:
-   - ```sh
+   ```sh
      cd fluxe-circuits/fluxe-circuits
      cargo test -- fluxe_circuits::setup::tests::test_trusted_setup_generation --ignored
    ```
@@ -455,7 +455,7 @@ Your client must:
 2) **Build a sample transfer proof** (client app):
    - Build `TransferCircuit` witnesses (notes, paths, non-membership, append & insert witnesses).
    - Create public inputs vector using `circuit.public_inputs()`.
-   - ```rust
+   ```rust
      use fluxe_circuits::{transfer::TransferCircuit, circuits::CircuitSetup};
      // ... build circuit instance "circuit"
      let setup = CircuitSetup::setup(circuit.clone(), &mut rng)?;
@@ -465,14 +465,14 @@ Your client must:
    ```
 
 3) **Run the API** and **submit**:
-   - ```sh
+   ```sh
      cd fluxe-circuits/fluxe-api
      cargo run --release
    ```
    - Submit to `/submit/transfer` (ensure you wired `parse_proof_from_bytes`).
 
 4) **Process a batch**:
-   - ```sh
+   ```sh
      curl -X POST http://127.0.0.1:3000/batch/process
    ```
 
