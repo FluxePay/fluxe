@@ -227,21 +227,14 @@ impl SortedInsertWitness {
     
     /// Compute the root after insertion
     pub fn compute_new_root(&self, params: &TreeParams) -> F {
-        // This is a simplified computation
-        // In practice, this would properly update the tree structure
-        
-        // Step 1: Compute intermediate root after updating predecessor
-        let updated_pred_hash = self.updated_pred_leaf.hash();
-        let intermediate_root = self.compute_root_with_leaf(
-            &self.pred_update_path,
-            updated_pred_hash,
-            params,
-        );
-        
-        // Step 2: For simplicity, just hash the intermediate root with the new leaf
-        // In a real implementation, this would properly insert the new leaf
+        // The new_leaf_path is from the FINAL tree state (after both updates)
+        // So we compute the root directly with the new leaf
         let new_leaf_hash = self.new_leaf.hash();
-        poseidon_hash(&[intermediate_root, new_leaf_hash])
+        self.compute_root_with_leaf(
+            &self.new_leaf_path,
+            new_leaf_hash,
+            params,
+        )
     }
     
     /// Helper to compute root with a specific leaf

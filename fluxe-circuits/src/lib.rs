@@ -5,6 +5,7 @@ pub mod burn;
 pub mod transfer;
 pub mod object_update;
 pub mod setup;
+pub mod utils;
 
 pub use circuits::*;
 pub use mint::*;

@@ -252,13 +252,14 @@ fn bench_parallel_verification(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(
-    benches,
-    bench_mint_verification,
+criterion_group! {
+    name = benches;
+    config = Criterion::default().sample_size(10);
+    targets = bench_mint_verification,
     bench_burn_verification,
     bench_transfer_verification,
     bench_object_update_verification,
     bench_batch_verification,
     bench_parallel_verification
-);
+}
 criterion_main!(benches);
