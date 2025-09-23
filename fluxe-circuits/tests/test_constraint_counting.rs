@@ -1,17 +1,14 @@
 use ark_bls12_381::Fr as F;
-use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
+use ark_relations::r1cs::ConstraintSystem;
 use ark_r1cs_std::prelude::*;
 
-use fluxe_circuits::transfer::TransferCircuit;
 use fluxe_circuits::gadgets::note::NoteVar;
-use fluxe_circuits::utils::ec_helpers::{compute_owner_address_circuit_compatible, get_pk_coords_circuit_compatible};
+use fluxe_circuits::utils::ec_helpers::compute_owner_address_circuit_compatible;
 use fluxe_core::{
     Note, 
     crypto::pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness},
     merkle::{IncrementalTree, SortedTree},
-    types::Amount,
 };
-use fluxe_circuits::gadgets::sorted_insert::SortedInsertWitness;
 
 #[test]
 fn test_constraint_counting_for_2_inputs() {
@@ -21,7 +18,7 @@ fn test_constraint_counting_for_2_inputs() {
     let params = PedersenParams::setup_value_commitment();
     
     // Create trees
-    let mut cmt_tree = IncrementalTree::new(16);
+    let cmt_tree = IncrementalTree::new(16);
     let mut nft_tree = SortedTree::new(16);
     let _ = nft_tree.insert(F::from(0u64)); // Sentinel
     

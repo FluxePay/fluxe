@@ -9,7 +9,6 @@ use ark_std::rand::thread_rng;
 mod common;
 
 use common::create_transfer_circuit;
-use fluxe_circuits::transfer::TransferCircuit;
 
 #[test]
 fn test_pinpoint_2_1_failure() {

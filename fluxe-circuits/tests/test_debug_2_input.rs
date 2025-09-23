@@ -7,10 +7,7 @@ use fluxe_circuits::utils::ec_helpers::{compute_owner_address_circuit_compatible
 use fluxe_circuits::gadgets::sorted_insert::SortedInsertWitness;
 use fluxe_core::{
     Note, 
-    crypto::{
-        pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness},
-        poseidon_hash,
-    },
+    crypto::pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness},
     merkle::{IncrementalTree, SortedTree},
     types::Amount,
 };
@@ -24,7 +21,7 @@ fn test_minimal_2_input_circuit_parts() {
     let params = PedersenParams::setup_value_commitment();
     
     // Create trees
-    let mut cmt_tree = IncrementalTree::new(16);
+    let cmt_tree = IncrementalTree::new(16);
     let mut nft_tree = SortedTree::new(16);
     let _ = nft_tree.insert(F::from(0u64)); // Sentinel
     
@@ -127,11 +124,11 @@ fn test_debug_2_identical_inputs() {
     
     // Double-check the address computation
     use fluxe_core::crypto::poseidon_hash;
-    let recomputed_addr1 = poseidon_hash(&vec![pk_x1, pk_y1]);
+    let recomputed_addr1 = poseidon_hash(&[pk_x1, pk_y1]);
     println!("Recomputed address 1 from pk: {:?}", recomputed_addr1);
     assert_eq!(owner_addr1, recomputed_addr1, "Address 1 computation mismatch!");
     
-    let recomputed_addr2 = poseidon_hash(&vec![pk_x2, pk_y2]);
+    let recomputed_addr2 = poseidon_hash(&[pk_x2, pk_y2]);
     println!("Recomputed address 2 from pk: {:?}", recomputed_addr2);
     assert_eq!(owner_addr2, recomputed_addr2, "Address 2 computation mismatch!");
     let nk = F::from(456u64);
@@ -400,7 +397,7 @@ fn test_debug_2_identical_inputs() {
         println!("\n=== Constraint Debugging ===");
         
         // Try to isolate where the failure is by checking constraints at different points
-        let mut check_points = vec![1000, 2000, 3000, 4000, 5000, 6000, 7000, 7500, 7900, 7990, 7995, 8000, 8100, 8200, 8251];
+        let check_points = vec![1000, 2000, 3000, 4000, 5000, 6000, 7000, 7500, 7900, 7990, 7995, 8000, 8100, 8200, 8251];
         
         for checkpoint in check_points {
             if checkpoint <= cs.num_constraints() {

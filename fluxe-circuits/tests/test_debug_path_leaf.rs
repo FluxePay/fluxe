@@ -24,11 +24,9 @@ fn test_debug_path_leaf_field() {
     println!("  next_index: {}", nm_proof.low_leaf.next_index);
     
     // Compute the hash of the predecessor leaf
-    let pred_leaf_hash = poseidon_hash(&vec![
-        nm_proof.low_leaf.key,
+    let pred_leaf_hash = poseidon_hash(&[nm_proof.low_leaf.key,
         nm_proof.low_leaf.next_key,
-        F::from(nm_proof.low_leaf.next_index as u64),
-    ]);
+        F::from(nm_proof.low_leaf.next_index as u64)]);
     println!("\nComputed predecessor leaf hash: {:?}", pred_leaf_hash);
     
     // Check the path
@@ -55,11 +53,9 @@ fn test_debug_path_leaf_field() {
     println!("  leaf_index: {}", insert_witness.pred_update_path.leaf_index);
     
     // The pred_update_path.leaf should be the hash of the ORIGINAL predecessor
-    let original_pred_hash = poseidon_hash(&vec![
-        insert_witness.range_proof.low_leaf.key,
+    let original_pred_hash = poseidon_hash(&[insert_witness.range_proof.low_leaf.key,
         insert_witness.range_proof.low_leaf.next_key,
-        F::from(insert_witness.range_proof.low_leaf.next_index as u64),
-    ]);
+        F::from(insert_witness.range_proof.low_leaf.next_index as u64)]);
     println!("\nOriginal predecessor hash: {:?}", original_pred_hash);
     
     if insert_witness.pred_update_path.leaf == original_pred_hash {
@@ -75,11 +71,9 @@ fn test_debug_path_leaf_field() {
     println!("  leaf_index: {}", insert_witness.new_leaf_path.leaf_index);
     
     // The new_leaf_path.leaf should be the hash of the new leaf
-    let new_leaf_hash = poseidon_hash(&vec![
-        insert_witness.new_leaf.key,
+    let new_leaf_hash = poseidon_hash(&[insert_witness.new_leaf.key,
         insert_witness.new_leaf.next_key,
-        F::from(insert_witness.new_leaf.next_index as u64),
-    ]);
+        F::from(insert_witness.new_leaf.next_index as u64)]);
     println!("\nNew leaf hash: {:?}", new_leaf_hash);
     
     if insert_witness.new_leaf_path.leaf == new_leaf_hash {

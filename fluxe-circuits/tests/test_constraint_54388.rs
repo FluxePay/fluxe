@@ -1,5 +1,5 @@
 use ark_bls12_381::Fr as F;
-use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
+use ark_relations::r1cs::ConstraintSystem;
 use ark_r1cs_std::prelude::*;
 use ark_r1cs_std::fields::fp::FpVar;
 
@@ -31,11 +31,9 @@ fn test_constraint_54388_debug() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n--- Witness Analysis ---");
     
     // Check pred_update_path
-    let original_pred_hash = poseidon_hash(&vec![
-        insert_witness_core.range_proof.low_leaf.key,
+    let original_pred_hash = poseidon_hash(&[insert_witness_core.range_proof.low_leaf.key,
         insert_witness_core.range_proof.low_leaf.next_key,
-        F::from(insert_witness_core.range_proof.low_leaf.next_index as u64),
-    ]);
+        F::from(insert_witness_core.range_proof.low_leaf.next_index as u64)]);
     
     println!("\nOriginal predecessor leaf:");
     println!("  key: {:?}", insert_witness_core.range_proof.low_leaf.key);
@@ -138,18 +136,16 @@ fn test_constraint_54388_debug() -> Result<(), Box<dyn std::error::Error>> {
     
     if cs2.is_satisfied().unwrap() {
         println!("✅ Constraint satisfied when tested in isolation!");
-    } else {
-        if let Ok(Some(unsat)) = cs2.which_is_unsatisfied() {
-            println!("❌ Constraint {} unsatisfied even in isolation!", unsat);
-            
-            // Debug: check the actual values
-            println!("\nDebug values:");
-            if let Ok(pred_hash_value) = pred_leaf_hash_var.value() {
-                println!("  pred_leaf_hash_var value: {:?}", pred_hash_value);
-            }
-            if let Ok(path_leaf_value) = pred_update_path_var.leaf.value() {
-                println!("  pred_update_path.leaf value: {:?}", path_leaf_value);
-            }
+    } else if let Ok(Some(unsat)) = cs2.which_is_unsatisfied() {
+        println!("❌ Constraint {} unsatisfied even in isolation!", unsat);
+        
+        // Debug: check the actual values
+        println!("\nDebug values:");
+        if let Ok(pred_hash_value) = pred_leaf_hash_var.value() {
+            println!("  pred_leaf_hash_var value: {:?}", pred_hash_value);
+        }
+        if let Ok(path_leaf_value) = pred_update_path_var.leaf.value() {
+            println!("  pred_update_path.leaf value: {:?}", path_leaf_value);
         }
     }
     

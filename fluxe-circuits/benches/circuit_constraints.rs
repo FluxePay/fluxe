@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use ark_bls12_381::Fr as F;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem};
-use ark_ff::{UniformRand, PrimeField, BigInteger};
+use ark_ff::{UniformRand, PrimeField};
 use ark_std::rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 
@@ -76,7 +76,7 @@ fn create_mint_circuit<R: RngCore>(rng: &mut R) -> MintCircuit {
 }
 
 fn create_burn_circuit<R: RngCore>(rng: &mut R) -> BurnCircuit {
-    use fluxe_core::merkle::{SortedTree, RangePath};
+    use fluxe_core::merkle::SortedTree;
     use fluxe_core::crypto::poseidon::poseidon_hash;
     use fluxe_circuits::gadgets::sorted_insert::SortedInsertWitness;
     
@@ -106,7 +106,7 @@ fn create_burn_circuit<R: RngCore>(rng: &mut R) -> BurnCircuit {
     // Compute the actual nullifier
     let cm_in = note_in.commitment();
     let psi = F::from_le_bytes_mod_order(&psi_bytes);
-    let nf_in = poseidon_hash(&vec![F::from(2u64), nk, psi, cm_in]); // DOM_NF = 2
+    let nf_in = poseidon_hash(&[F::from(2u64), nk, psi, cm_in]); // DOM_NF = 2
     
     // Create exit receipt with the actual nullifier
     let exit_receipt = ExitReceipt::new(1, Amount::from(value as u128), nf_in, 1);
@@ -232,7 +232,7 @@ fn create_transfer_circuit<R: RngCore>(rng: &mut R, num_inputs: usize, num_outpu
         
         // Compute nullifier properly
         let psi = F::from_le_bytes_mod_order(&psi_bytes);
-        let nf = poseidon_hash(&vec![F::from(2u64), nk, psi, cm]); // DOM_NF = 2
+        let nf = poseidon_hash(&[F::from(2u64), nk, psi, cm]); // DOM_NF = 2
         
         // Get non-membership proof for nullifier
         let nm_proof = nft_tree.prove_non_membership(nf).unwrap();

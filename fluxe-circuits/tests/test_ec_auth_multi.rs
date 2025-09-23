@@ -1,5 +1,5 @@
 use ark_bls12_381::Fr as F;
-use ark_relations::r1cs::{ConstraintSystem, ConstraintSystemRef};
+use ark_relations::r1cs::ConstraintSystem;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;
 use ark_std::rand::thread_rng;

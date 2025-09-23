@@ -1,7 +1,7 @@
 use ark_bls12_381::Fr as F;
 use ark_ed_on_bls12_381::{EdwardsProjective, Fq};
 use ark_ec::{AffineRepr, CurveGroup, PrimeGroup};
-use ark_ff::{BigInteger, PrimeField, Field, Zero, One, AdditiveGroup};
+use ark_ff::{BigInteger, PrimeField, Zero, One, AdditiveGroup};
 use fluxe_core::crypto::poseidon::poseidon_hash;
 
 /// Convert Fq to Fr using the same method as the circuit

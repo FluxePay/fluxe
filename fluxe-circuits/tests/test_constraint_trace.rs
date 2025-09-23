@@ -1,5 +1,5 @@
 use ark_bls12_381::Fr as F;
-use ark_ff::{UniformRand, PrimeField, BigInteger};
+use ark_ff::{PrimeField, BigInteger};
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;

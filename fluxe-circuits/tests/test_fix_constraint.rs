@@ -86,7 +86,7 @@ fn test_analyze_constraint_failure() {
         &PedersenRandomness { r: randomness_out },
     );
     
-    let expected_lineage = poseidon_hash(&vec![note_in.lineage_hash, F::from(0u64)]);
+    let expected_lineage = poseidon_hash(&[note_in.lineage_hash, F::from(0u64)]);
     let mut note_out = Note::new(1, v_comm_out, F::from(789u64), [8u8; 32], 1);
     note_out.compliance_hash = F::from(1u64);
     note_out.callbacks_hash = F::from(1u64);

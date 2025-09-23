@@ -1,5 +1,4 @@
 use ark_bls12_381::Fr as F;
-use ark_ff::UniformRand;
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
 use ark_std::rand::{SeedableRng, rngs::StdRng};
 
@@ -19,7 +18,7 @@ fn test_simplest_possible_transfer() {
     println!("\n=== Testing simplest possible 1-1 transfer ===\n");
     
     // Use deterministic randomness
-    let mut rng = StdRng::seed_from_u64(12345);
+    let rng = StdRng::seed_from_u64(12345);
     let params = PedersenParams::setup_value_commitment();
     
     // Setup trees
@@ -78,7 +77,7 @@ fn test_simplest_possible_transfer() {
     let recipient_addr = F::from(789u64);
     
     // Compute lineage for output
-    let expected_lineage = poseidon_hash(&vec![note_in.lineage_hash, F::from(0u64)]);
+    let expected_lineage = poseidon_hash(&[note_in.lineage_hash, F::from(0u64)]);
     
     println!("Debug values:");
     println!("  owner_addr: {:?}", owner_addr);

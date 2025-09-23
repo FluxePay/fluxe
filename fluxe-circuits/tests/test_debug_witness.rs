@@ -24,11 +24,9 @@ fn test_debug_witness_creation() {
     println!("  low_leaf.next_index: {}", witness.range_proof.low_leaf.next_index);
     
     // Compute what the hash should be
-    let expected_hash = poseidon_hash(&vec![
-        witness.range_proof.low_leaf.key,
+    let expected_hash = poseidon_hash(&[witness.range_proof.low_leaf.key,
         witness.range_proof.low_leaf.next_key,
-        F::from(witness.range_proof.low_leaf.next_index as u64),
-    ]);
+        F::from(witness.range_proof.low_leaf.next_index as u64)]);
     println!("\nExpected hash of low_leaf: {:?}", expected_hash);
     
     println!("\nPred update path:");

@@ -1,5 +1,5 @@
 use ark_bls12_381::Fr as F;
-use fluxe_core::merkle::{SortedTree, SortedInsertWitness as CoreWitness};
+use fluxe_core::merkle::SortedTree;
 use fluxe_circuits::gadgets::sorted_insert::SortedInsertWitness as CircuitWitness;
 use fluxe_core::crypto::poseidon_hash;
 
@@ -55,11 +55,9 @@ fn test_witness_compatibility() {
     println!("Height match: {}", circuit_witness.height == core_witness.height);
     
     // Check if the pred_update_path.leaf matches the hash of range_proof.low_leaf
-    let expected_hash = poseidon_hash(&vec![
-        circuit_witness.range_proof.low_leaf.key,
+    let expected_hash = poseidon_hash(&[circuit_witness.range_proof.low_leaf.key,
         circuit_witness.range_proof.low_leaf.next_key,
-        F::from(circuit_witness.range_proof.low_leaf.next_index as u64),
-    ]);
+        F::from(circuit_witness.range_proof.low_leaf.next_index as u64)]);
     
     println!("\n=== Critical Check ===");
     println!("Expected hash of low_leaf: {:?}", expected_hash);

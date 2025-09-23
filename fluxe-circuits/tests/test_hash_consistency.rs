@@ -19,11 +19,9 @@ fn test_hash_consistency() -> Result<(), Box<dyn std::error::Error>> {
     };
     
     // Compute hash outside circuit
-    let hash_outside = poseidon_hash(&vec![
-        leaf.key,
+    let hash_outside = poseidon_hash(&[leaf.key,
         leaf.next_key,
-        F::from(leaf.next_index as u64),
-    ]);
+        F::from(leaf.next_index as u64)]);
     
     println!("Hash computed outside circuit: {:?}", hash_outside);
     
@@ -50,11 +48,9 @@ fn test_hash_consistency() -> Result<(), Box<dyn std::error::Error>> {
         next_index: 42,
     };
     
-    let hash2_outside = poseidon_hash(&vec![
-        leaf2.key,
+    let hash2_outside = poseidon_hash(&[leaf2.key,
         leaf2.next_key,
-        F::from(leaf2.next_index as u64),
-    ]);
+        F::from(leaf2.next_index as u64)]);
     
     let leaf2_var = SortedLeafVar::new_witness(cs.clone(), || Ok(leaf2.clone()))?;
     let hash2_var = leaf2_var.hash()?;

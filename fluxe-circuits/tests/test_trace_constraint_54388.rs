@@ -15,7 +15,7 @@ fn test_trace_constraint_54388() {
     println!("\n=== Tracing Constraint 54388 ===\n");
     
     // Use exact same setup as test_simple_working
-    let mut rng = StdRng::seed_from_u64(12345);
+    let rng = StdRng::seed_from_u64(12345);
     
     // Setup parameters exactly like test_simple_working
     let owner_sk = F::from(123u64);
@@ -60,7 +60,7 @@ fn test_trace_constraint_54388() {
     let v_comm_out = PedersenCommitment::commit(&params, value_out, &PedersenRandomness { r: randomness_out });
     
     let recipient_addr = F::from(789u64);
-    let expected_lineage = poseidon_hash(&vec![note_in.lineage_hash, F::from(0u64)]);
+    let expected_lineage = poseidon_hash(&[note_in.lineage_hash, F::from(0u64)]);
     
     println!("Debug values:");
     println!("  owner_addr: {:?}", owner_addr);
@@ -128,7 +128,7 @@ fn test_trace_constraint_54388() {
     let cs = ConstraintSystem::<F>::new_ref();
     
     // Add a hook to track when we hit constraint 54388
-    let mut last_count = 0;
+    let last_count = 0;
     let target = 54388;
     
     println!("Generating constraints...");

@@ -1,5 +1,4 @@
 use ark_bls12_381::Fr as F;
-use ark_ff::PrimeField;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_r1cs_std::prelude::*;
 use ark_r1cs_std::fields::fp::FpVar;
@@ -7,11 +6,11 @@ use ark_r1cs_std::fields::fp::FpVar;
 use fluxe_circuits::gadgets::sorted_insert::{SortedInsertWitness, SimtInsertVar};
 use fluxe_circuits::gadgets::sorted_tree::{RangePathVar, SortedLeafVar};
 use fluxe_circuits::gadgets::MerklePathVar;
-use fluxe_circuits::utils::ec_helpers::{compute_owner_address_circuit_compatible, get_pk_coords_circuit_compatible};
+use fluxe_circuits::utils::ec_helpers::compute_owner_address_circuit_compatible;
 use fluxe_core::{
     Note,
-    merkle::{IncrementalTree, SortedTree, TreeParams},
-    crypto::{PedersenParams, PedersenCommitment, PedersenRandomness, poseidon_hash},
+    merkle::{SortedTree, TreeParams},
+    crypto::{PedersenParams, PedersenCommitment, PedersenRandomness},
 };
 
 #[test]

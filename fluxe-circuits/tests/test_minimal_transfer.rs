@@ -16,7 +16,7 @@ fn test_minimal_transfer() {
     let owner_sk = F::from(123u64);
     let pk_x = F::from(456u64);
     let pk_y = F::from(789u64);
-    let owner_addr = poseidon_hash(&vec![pk_x, pk_y]);
+    let owner_addr = poseidon_hash(&[pk_x, pk_y]);
     let nk = F::from(111u64);
     
     // Create trees
@@ -66,7 +66,7 @@ fn test_minimal_transfer() {
     );
     
     let mut note_out = Note::new(1, v_comm_out, F::from(999u64), [0u8; 32], 1);
-    note_out.lineage_hash = poseidon_hash(&vec![note_in.lineage_hash, F::from(0u64)]);
+    note_out.lineage_hash = poseidon_hash(&[note_in.lineage_hash, F::from(0u64)]);
     
     // Add output to commitment tree
     let cm_out = note_out.commitment();

@@ -1,5 +1,4 @@
 use ark_bls12_381::Fr as F;
-use ark_ff::PrimeField;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;

@@ -1,7 +1,6 @@
 use ark_bls12_381::Fr as F;
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
 
-use fluxe_circuits::FluxeCircuit;
 use fluxe_circuits::transfer::TransferCircuit;
 use fluxe_circuits::utils::ec_helpers::{compute_owner_address_circuit_compatible, get_pk_coords_circuit_compatible};
 use fluxe_circuits::gadgets::sorted_insert::SortedInsertWitness;

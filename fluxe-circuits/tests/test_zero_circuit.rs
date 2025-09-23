@@ -1,7 +1,6 @@
 use ark_bls12_381::Fr as F;
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
 use ark_ff::Zero;
-use ark_std::rand::thread_rng;
 
 use fluxe_circuits::transfer::TransferCircuit;
 use fluxe_core::{
@@ -77,7 +76,7 @@ fn test_transfer_with_zero_values() {
     
     // Compute correct lineage hash even for zero values
     use fluxe_core::crypto::poseidon_hash;
-    let expected_lineage = poseidon_hash(&vec![F::from(1u64), F::zero()]); // Hash([parent_lineage, context])
+    let expected_lineage = poseidon_hash(&[F::from(1u64), F::zero()]); // Hash([parent_lineage, context])
     
     let mut note_out = Note::new(1, v_comm_out, recipient_addr, [0u8; 32], 1);
     note_out.compliance_hash = F::from(1u64);
@@ -209,7 +208,7 @@ fn test_transfer_with_one_values() {
     let recipient_addr = F::from(2u64);
     
     use fluxe_core::crypto::poseidon_hash;
-    let expected_lineage = poseidon_hash(&vec![F::from(1u64), F::from(0u64)]);
+    let expected_lineage = poseidon_hash(&[F::from(1u64), F::from(0u64)]);
     
     let mut note_out = Note::new(1, v_comm_out, recipient_addr, [1u8; 32], 1);
     note_out.compliance_hash = F::from(1u64);

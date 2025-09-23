@@ -1,5 +1,5 @@
 use ark_bls12_381::Fr as F;
-use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
+use ark_relations::r1cs::ConstraintSystem;
 use ark_r1cs_std::prelude::*;
 use ark_r1cs_std::fields::fp::FpVar;
 
@@ -134,10 +134,8 @@ fn test_manual_insert_gadget() -> Result<(), Box<dyn std::error::Error>> {
             if cs2.is_satisfied().unwrap() {
                 println!("✅ Works when using actual new root directly!");
                 println!("The issue is that computed_new_root != actual new_root");
-            } else {
-                if let Ok(Some(unsat2)) = cs2.which_is_unsatisfied() {
-                    println!("❌ Still fails with actual root: {}", unsat2);
-                }
+            } else if let Ok(Some(unsat2)) = cs2.which_is_unsatisfied() {
+                println!("❌ Still fails with actual root: {}", unsat2);
             }
         }
     } else {

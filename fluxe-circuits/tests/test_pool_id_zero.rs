@@ -1,5 +1,4 @@
 use ark_bls12_381::Fr as F;
-use ark_ff::PrimeField;
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
 use ark_std::rand::thread_rng;
 
@@ -75,7 +74,7 @@ fn test_transfer_with_zero_pool_id() {
     let recipient_addr = F::from(111u64);
     
     // Compute lineage hash for output note matching the circuit's expectation
-    let expected_lineage = poseidon_hash(&vec![note_in.lineage_hash, F::from(0u64)]);
+    let expected_lineage = poseidon_hash(&[note_in.lineage_hash, F::from(0u64)]);
     
     let mut note_out = Note::new(1, v_comm_out, recipient_addr, [2u8; 32], pool_id);
     note_out.compliance_hash = F::from(1u64);

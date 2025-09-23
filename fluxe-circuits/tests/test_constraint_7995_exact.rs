@@ -6,7 +6,7 @@ use ark_r1cs_std::fields::fp::FpVar;
 use fluxe_circuits::gadgets::sorted_tree::RangePathVar;
 use fluxe_circuits::gadgets::note::NoteVar;
 use fluxe_circuits::gadgets::range_proof::RangeProofGadget;
-use fluxe_circuits::utils::ec_helpers::{compute_owner_address_circuit_compatible, get_pk_coords_circuit_compatible};
+use fluxe_circuits::utils::ec_helpers::compute_owner_address_circuit_compatible;
 use fluxe_core::{
     Note, 
     crypto::pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness},

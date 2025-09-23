@@ -1,5 +1,4 @@
 use ark_bls12_381::Fr as F;
-use ark_ff::UniformRand;
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
 use ark_std::rand::thread_rng;
 
@@ -8,13 +7,13 @@ use fluxe_circuits::utils::ec_helpers::{compute_owner_address_circuit_compatible
 use fluxe_core::{
     data_structures::{Note, ExitReceipt},
     crypto::pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness},
-    merkle::{MerklePath, SortedTree, IncrementalTree, TreeParams},
+    merkle::{SortedTree, IncrementalTree},
     types::Amount,
 };
 
 #[test]
 fn test_burn_circuit_simple() {
-    let mut rng = thread_rng();
+    let rng = thread_rng();
     let params = PedersenParams::setup_value_commitment();
     
     let value = 500u64;
