@@ -5,7 +5,7 @@ use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use fluxe_core::{
     data_structures::{CallbackEntry, CallbackInvocation, ComplianceState, ZkObject},
-    merkle::{MerklePath, RangePath},
+    merkle::{MerklePath, RangePath, AppendWitness},
     types::*,
 };
 
@@ -47,6 +47,15 @@ pub struct ObjectUpdateCircuit {
     /// Merkle path for old object
     pub obj_path_old: MerklePath,
     
+    /// Append witness for new object in OBJ tree
+    pub obj_append_witness: Option<AppendWitness>,
+    
+    /// Randomness for old object commitment
+    pub obj_old_randomness: F,
+    
+    /// Randomness for new object commitment  
+    pub obj_new_randomness: F,
+    
     /// Decryption key for callback
     pub decrypt_key: Option<F>,
     
@@ -81,7 +90,8 @@ impl ObjectUpdateCircuit {
         cb_root: MerkleRoot,
         current_time: Time,
     ) -> Self {
-        // For backward compatibility, set callback_signature to None
+        // For backward compatibility, set callback_signature and obj_append_witness to None
+        // Use deterministic randomness for backward compatibility
         Self {
             obj_old,
             state_old,
@@ -93,6 +103,9 @@ impl ObjectUpdateCircuit {
             cb_path,
             cb_nonmembership,
             obj_path_old,
+            obj_append_witness: None,
+            obj_old_randomness: F::from(1u64),
+            obj_new_randomness: F::from(2u64),
             decrypt_key,
             obj_root_old,
             obj_root_new,
@@ -101,7 +114,7 @@ impl ObjectUpdateCircuit {
         }
     }
     
-    /// Create with Schnorr signature for callback verification
+    /// Create with Schnorr signature for callback verification and append witness
     pub fn new_with_signature(
         obj_old: ZkObject,
         state_old: ComplianceState,
@@ -113,6 +126,7 @@ impl ObjectUpdateCircuit {
         cb_path: Option<MerklePath>,
         cb_nonmembership: Option<RangePath>,
         obj_path_old: MerklePath,
+        obj_append_witness: Option<AppendWitness>,
         decrypt_key: Option<F>,
         obj_root_old: MerkleRoot,
         obj_root_new: MerkleRoot,
@@ -130,6 +144,9 @@ impl ObjectUpdateCircuit {
             cb_path,
             cb_nonmembership,
             obj_path_old,
+            obj_append_witness,
+            obj_old_randomness: F::from(1u64),
+            obj_new_randomness: F::from(2u64),
             decrypt_key,
             obj_root_old,
             obj_root_new,
@@ -170,6 +187,10 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
             || Ok(self.obj_path_old.clone()),
         )?;
         
+        // Witness randomness for object commitments
+        let obj_old_rand_var = FpVar::new_witness(cs.clone(), || Ok(self.obj_old_randomness))?;
+        let obj_new_rand_var = FpVar::new_witness(cs.clone(), || Ok(self.obj_new_randomness))?;
+        
         // Input public values
         let obj_root_old_var = FpVar::new_input(cs.clone(), || Ok(self.obj_root_old))?;
         let obj_root_new_var = FpVar::new_input(cs.clone(), || Ok(self.obj_root_new))?;
@@ -177,7 +198,7 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
         let current_time_var = FpVar::new_input(cs.clone(), || Ok(F::from(self.current_time)))?;
         
         // Constraint 1: Verify old object membership in OBJ_ROOT_old
-        let cm_obj_old = obj_old_var.commitment()?;
+        let cm_obj_old = obj_old_var.commitment_with_randomness(&obj_old_rand_var)?;
         cm_obj_old.enforce_equal(&obj_path_var.leaf)?;
         obj_path_var.enforce_valid(&obj_root_old_var)?;
         
@@ -305,16 +326,37 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
         // Constraint 5: Verify state transition is valid
         ObjectUpdateCircuit::verify_state_transition_static(&state_old_var, &state_new_var)?;
         
-        // Constraint 6: Compute new object commitment
-        let cm_obj_new = obj_new_var.commitment()?;
+        // Constraint 6: Compute new object commitment with randomness
+        let cm_obj_new = obj_new_var.commitment_with_randomness(&obj_new_rand_var)?;
         
-        // Constraint 7: Verify OBJ_ROOT_new transition
-        // Simplified: just append new object (in reality would be more complex tree update)
-        let computed_root = poseidon_hash_zk(&[
-            obj_root_old_var.clone(),
-            cm_obj_new,
-        ])?;
-        computed_root.enforce_equal(&obj_root_new_var)?;
+        // Constraint 7: Verify OBJ_ROOT_new transition using proper append proof
+        if let Some(ref append_witness) = self.obj_append_witness {
+            use crate::gadgets::merkle_append::ImtAppendProofVar;
+            
+            // Create the append proof variable
+            let obj_append_proof = ImtAppendProofVar {
+                old_root: obj_root_old_var.clone(),
+                new_root: obj_root_new_var.clone(),
+                leaf_index: FpVar::new_witness(cs.clone(), || Ok(F::from(append_witness.leaf_index as u64)))?,
+                appended_leaf: cm_obj_new,
+                pre_siblings: append_witness.pre_siblings
+                    .iter()
+                    .map(|s| FpVar::new_witness(cs.clone(), || Ok(*s)))
+                    .collect::<Result<Vec<_>, _>>()?,
+                height: append_witness.height,
+            };
+            
+            // Verify the append is valid
+            obj_append_proof.enforce()?;
+        } else {
+            // If no witness provided, fall back to simple hash (for backward compatibility)
+            // In production, this should be required
+            let computed_root = poseidon_hash_zk(&[
+                obj_root_old_var.clone(),
+                cm_obj_new,
+            ])?;
+            computed_root.enforce_equal(&obj_root_new_var)?;
+        }
         
         Ok(())
     }
