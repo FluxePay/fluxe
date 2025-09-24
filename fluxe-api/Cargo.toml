@@ -8,6 +8,7 @@ authors.workspace = true
 fluxe-core = { path = "../fluxe-core" }
 fluxe-circuits = { path = "../fluxe-circuits" }
 ark-bls12-381 = { workspace = true }
+ark-ff = { workspace = true }
 ark-groth16 = { workspace = true }
 ark-serialize = { workspace = true }
 hex = "0.4"

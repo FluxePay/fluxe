@@ -408,46 +408,119 @@ async fn get_supply(
 }
 
 async fn get_commitment_proof(
-    State(_api): State<Arc<FluxeApi>>,
-    Path(_cm): Path<String>,
+    State(api): State<Arc<FluxeApi>>,
+    Path(cm_hex): Path<String>,
 ) -> Result<Json<ApiResponse<ProofResponse>>, StatusCode> {
-    // Placeholder - would implement actual proof generation
-    let response = ProofResponse {
-        exists: true,
-        path: Some(vec!["0x123".to_string(), "0x456".to_string()]),
-        leaf: Some("0x789".to_string()),
-        index: Some(0),
+    // Parse the commitment from hex
+    let cm = match parse_field_from_hex(&cm_hex) {
+        Ok(c) => c,
+        Err(e) => return Ok(Json(ApiResponse::error(e.to_string()))),
     };
     
-    Ok(Json(ApiResponse::success(response)))
+    // Get proof from state manager
+    let verifier = api.verifier.lock().unwrap();
+    match verifier.get_commitment_proof(&cm) {
+        Some(path) => {
+            let response = ProofResponse {
+                exists: true,
+                path: Some(path.siblings.iter().map(field_to_hex).collect()),
+                leaf: Some(field_to_hex(&path.leaf)),
+                index: Some(path.leaf_index),
+            };
+            Ok(Json(ApiResponse::success(response)))
+        }
+        None => {
+            let response = ProofResponse {
+                exists: false,
+                path: None,
+                leaf: None,
+                index: None,
+            };
+            Ok(Json(ApiResponse::success(response)))
+        }
+    }
 }
 
 async fn get_nullifier_proof(
-    State(_api): State<Arc<FluxeApi>>,
-    Path(_nf): Path<String>,
+    State(api): State<Arc<FluxeApi>>,
+    Path(nf_hex): Path<String>,
 ) -> Result<Json<ApiResponse<ProofResponse>>, StatusCode> {
-    let response = ProofResponse {
-        exists: false,
-        path: None,
-        leaf: None,
-        index: None,
+    // Parse the nullifier from hex
+    let nf = match parse_field_from_hex(&nf_hex) {
+        Ok(n) => n,
+        Err(e) => return Ok(Json(ApiResponse::error(e.to_string()))),
     };
     
-    Ok(Json(ApiResponse::success(response)))
+    // Check if nullifier exists in NFT tree
+    let verifier = api.verifier.lock().unwrap();
+    if verifier.nullifier_exists(&nf) {
+        // Membership proof - nullifier exists (already spent)
+        match verifier.get_nullifier_membership_proof(&nf) {
+            Some(path) => {
+                let response = ProofResponse {
+                    exists: true,
+                    path: Some(path.siblings.iter().map(field_to_hex).collect()),
+                    leaf: Some(field_to_hex(&path.leaf)),
+                    index: Some(path.leaf_index),
+                };
+                Ok(Json(ApiResponse::success(response)))
+            }
+            None => {
+                Ok(Json(ApiResponse::error("Could not generate proof".to_string())))
+            }
+        }
+    } else {
+        // Non-membership proof - nullifier doesn't exist (can be spent)
+        match verifier.get_nullifier_nonmembership_proof(&nf) {
+            Ok(range_path) => {
+                // For non-membership, return the gap proof
+                let response = ProofResponse {
+                    exists: false,
+                    path: Some(range_path.low_path.siblings.iter().map(field_to_hex).collect()),
+                    leaf: Some(field_to_hex(&range_path.low_leaf.hash())),
+                    index: Some(range_path.low_path.leaf_index),
+                };
+                Ok(Json(ApiResponse::success(response)))
+            }
+            Err(e) => {
+                Ok(Json(ApiResponse::error(format!("Could not generate non-membership proof: {}", e))))
+            }
+        }
+    }
 }
 
 async fn get_object_proof(
-    State(_api): State<Arc<FluxeApi>>,
-    Path(_obj): Path<String>,
+    State(api): State<Arc<FluxeApi>>,
+    Path(obj_hex): Path<String>,
 ) -> Result<Json<ApiResponse<ProofResponse>>, StatusCode> {
-    let response = ProofResponse {
-        exists: true,
-        path: Some(vec!["0xabc".to_string()]),
-        leaf: Some("0xdef".to_string()),
-        index: Some(5),
+    // Parse the object commitment from hex
+    let obj_cm = match parse_field_from_hex(&obj_hex) {
+        Ok(o) => o,
+        Err(e) => return Ok(Json(ApiResponse::error(e.to_string()))),
     };
     
-    Ok(Json(ApiResponse::success(response)))
+    // Get proof from state manager
+    let verifier = api.verifier.lock().unwrap();
+    match verifier.get_object_proof(&obj_cm) {
+        Some(path) => {
+            let response = ProofResponse {
+                exists: true,
+                path: Some(path.siblings.iter().map(field_to_hex).collect()),
+                leaf: Some(field_to_hex(&path.leaf)),
+                index: Some(path.leaf_index),
+            };
+            Ok(Json(ApiResponse::success(response)))
+        }
+        None => {
+            let response = ProofResponse {
+                exists: false,
+                path: None,
+                leaf: None,
+                index: None,
+            };
+            Ok(Json(ApiResponse::success(response)))
+        }
+    }
 }
 
 async fn get_sanctions_proof(
@@ -550,7 +623,45 @@ fn convert_serializable_callback_ops(_ops: &[SerializableCallbackOp]) -> Result<
     Ok(Vec::new())
 }
 
-fn compute_notes_commitment(_notes: &[fluxe_core::data_structures::Note]) -> ark_bls12_381::Fr {
-    // Placeholder - would compute Merkle commitment of notes
-    ark_bls12_381::Fr::from(0)
+fn compute_notes_commitment(notes: &[fluxe_core::data_structures::Note]) -> ark_bls12_381::Fr {
+    use fluxe_core::crypto::poseidon_hash;
+    
+    // Compute hash chain: H(0, cm1, cm2, ...)
+    // This must match the circuit's cm_out_list_commit computation
+    let mut commitment = ark_bls12_381::Fr::from(0u64);
+    
+    for note in notes {
+        let cm = note.commitment();
+        commitment = poseidon_hash(&[commitment, cm]);
+    }
+    
+    commitment
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ark_ff::Field;
+    use ark_serialize::CanonicalSerialize;
+
+    #[test]
+    fn test_parse_field_from_hex() {
+        // Test valid hex with 0x prefix
+        let field = ark_bls12_381::Fr::from(42u64);
+        let hex = field_to_hex(&field);
+        let parsed = parse_field_from_hex(&hex).unwrap();
+        assert_eq!(field, parsed);
+    }
+
+    #[test]
+    fn test_parse_public_inputs() {
+        let inputs = vec![
+            field_to_hex(&ark_bls12_381::Fr::from(1u64)),
+            field_to_hex(&ark_bls12_381::Fr::from(2u64)),
+        ];
+        let result = parse_public_inputs(&inputs).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], ark_bls12_381::Fr::from(1u64));
+        assert_eq!(result[1], ark_bls12_381::Fr::from(2u64));
+    }
 }

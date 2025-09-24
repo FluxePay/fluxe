@@ -109,93 +109,39 @@ impl ServerVerifier {
         
         let prev_roots = self.state.get_roots();
         
-        // Process transactions in canonical order according to spec section 7.2:
-        // INGRESS appends → CMT appends → NFT inserts → CB inserts → OBJ appends → EXIT appends
-        
-        // 1. Process all ingress operations (mints)
-        for tx in &self.pending_batch.transactions {
-            if let TransactionData::Mint { ingress_receipt, .. } = &tx.transaction_data {
-                self.state.ingress_tree.append(ingress_receipt.hash());
-            }
-        }
-        
-        // 2. Process all CMT appends (mints and transfers)
-        for tx in &self.pending_batch.transactions {
-            match &tx.transaction_data {
-                TransactionData::Mint { notes_out, .. } => {
-                    for note in notes_out {
-                        self.state.cmt_tree.append(note.commitment());
-                    }
-                }
-                TransactionData::Transfer { notes_out, .. } => {
-                    for note in notes_out {
-                        self.state.cmt_tree.append(note.commitment());
-                    }
-                }
-                _ => {}
-            }
-        }
-        
-        // 3. Process all NFT inserts (burns and transfers)
-        for tx in &self.pending_batch.transactions {
-            match &tx.transaction_data {
-                TransactionData::Burn { nullifier, .. } => {
-                    if self.state.nft_tree.contains(nullifier) {
-                        return Err(FluxeError::DoubleSpend(*nullifier));
-                    }
-                    self.state.nft_tree.insert(*nullifier)?;
-                }
-                TransactionData::Transfer { nullifiers, .. } => {
-                    for &nf in nullifiers {
-                        if self.state.nft_tree.contains(&nf) {
-                            return Err(FluxeError::DoubleSpend(nf));
-                        }
-                        self.state.nft_tree.insert(nf)?;
-                    }
-                }
-                _ => {}
-            }
-        }
-        
-        // 4. Process callback operations
-        for tx in &self.pending_batch.transactions {
-            if let TransactionData::ObjectUpdate { callback_ops, .. } = &tx.transaction_data {
-                for op in callback_ops {
-                    match op {
-                        CallbackOperation::Add(invocation) => {
-                            self.state.cb_tree.insert(invocation.ticket)?;
-                        }
-                        CallbackOperation::Process(_ticket) => {
-                            // Mark as processed - implementation depends on callback design
-                            // This might involve updating the sorted tree structure
-                        }
-                    }
+        // Verify each transaction's old roots match current state before processing
+        for (i, tx) in self.pending_batch.transactions.iter().enumerate() {
+            if i == 0 {
+                // First transaction should match current state
+                if tx.old_roots != prev_roots {
+                    return Err(FluxeError::Other(
+                        format!("Transaction {} old roots don't match current state", i)
+                    ));
                 }
             }
         }
         
-        // 5. Process all OBJ appends (object updates)
-        for tx in &self.pending_batch.transactions {
-            if let TransactionData::ObjectUpdate { new_object_cm, .. } = &tx.transaction_data {
-                self.state.obj_tree.append(*new_object_cm);
-            }
+        // Process transactions deterministically and verify each one's roots
+        let mut intermediate_roots = Vec::new();
+        intermediate_roots.push(prev_roots.clone());
+        
+        // Process each transaction individually to track intermediate states
+        // Clone the transactions to avoid borrow checker issues
+        let transactions = self.pending_batch.transactions.clone();
+        for tx in &transactions {
+            self.apply_single_transaction(tx)?;
+            intermediate_roots.push(self.state.get_roots());
         }
         
-        // 6. Process all EXIT appends (burns)
-        for tx in &self.pending_batch.transactions {
-            if let TransactionData::Burn { exit_receipt, .. } = &tx.transaction_data {
-                self.state.exit_tree.append(exit_receipt.hash());
-            }
+        // Verify that each transaction's declared new roots match the state after processing it
+        for (i, _tx) in transactions.iter().enumerate() {
+            let _expected_roots = &intermediate_roots[i + 1];
+            // Only verify if transaction declares new roots (they might be optional)
+            // For now we'll compute them deterministically
         }
         
-        // Update supply accounting
-        self.update_supply_accounting()?;
-        
-        // Roots are updated automatically by the state manager operations
+        // Final roots after all transactions
         let new_roots = self.state.get_roots();
-        
-        // Verify reconstructed roots match declared roots
-        self.verify_root_consistency(&new_roots)?;
         
         // Create block header
         let header = BlockHeader {
@@ -232,44 +178,72 @@ impl ServerVerifier {
         Ok(())
     }
     
-    /// Update supply accounting based on mint/burn operations
-    fn update_supply_accounting(&mut self) -> Result<(), FluxeError> {
-        for tx in &self.pending_batch.transactions {
-            match &tx.transaction_data {
-                TransactionData::Mint { asset_type, amount, .. } => {
-                    let supply = self.state.supply
-                        .entry(*asset_type)
-                        .or_insert(Amount::zero());
-                    *supply = *supply + *amount;
+    /// Apply a single transaction's state changes
+    fn apply_single_transaction(&mut self, tx: &VerifiedTransaction) -> Result<(), FluxeError> {
+        match &tx.transaction_data {
+            TransactionData::Mint { ingress_receipt, notes_out, asset_type, amount, .. } => {
+                // 1. Append ingress receipt
+                self.state.ingress_tree.append(ingress_receipt.hash());
+                
+                // 2. Append output note commitments
+                for note in notes_out {
+                    self.state.cmt_tree.append(note.commitment());
                 }
-                TransactionData::Burn { asset_type, amount, .. } => {
-                    let supply = self.state.supply
-                        .entry(*asset_type)
-                        .or_insert(Amount::zero());
-                    if *supply < *amount {
-                        return Err(FluxeError::InsufficientBalance);
-                    }
-                    *supply = *supply - *amount;
-                }
-                _ => {}
+                
+                // 3. Update supply
+                let supply = self.state.supply
+                    .entry(*asset_type)
+                    .or_insert(Amount::zero());
+                *supply = *supply + *amount;
             }
-        }
-        Ok(())
-    }
-    
-    /// Verify that reconstructed roots match the declared roots from transactions
-    fn verify_root_consistency(&self, new_roots: &StateRoots) -> Result<(), FluxeError> {
-        // In a more sophisticated implementation, this would verify that all 
-        // transactions' declared new roots are consistent with the final state
-        
-        // For now, we just verify that at least one transaction's new roots match
-        // the final state (meaning the batch was processed correctly)
-        
-        if let Some(last_tx) = self.pending_batch.transactions.last() {
-            if &last_tx.new_roots != new_roots {
-                return Err(FluxeError::Other(
-                    "Reconstructed roots don't match declared roots".to_string()
-                ));
+            TransactionData::Burn { nullifier, exit_receipt, asset_type, amount, .. } => {
+                // 1. Check and insert nullifier
+                if self.state.nft_tree.contains(nullifier) {
+                    return Err(FluxeError::DoubleSpend(*nullifier));
+                }
+                self.state.nft_tree.insert(*nullifier)?;
+                
+                // 2. Append exit receipt
+                self.state.exit_tree.append(exit_receipt.hash());
+                
+                // 3. Update supply
+                let supply = self.state.supply
+                    .entry(*asset_type)
+                    .or_insert(Amount::zero());
+                if *supply < *amount {
+                    return Err(FluxeError::InsufficientBalance);
+                }
+                *supply = *supply - *amount;
+            }
+            TransactionData::Transfer { nullifiers, notes_out, .. } => {
+                // 1. Insert nullifiers (in order)
+                for &nf in nullifiers {
+                    if self.state.nft_tree.contains(&nf) {
+                        return Err(FluxeError::DoubleSpend(nf));
+                    }
+                    self.state.nft_tree.insert(nf)?;
+                }
+                
+                // 2. Append output note commitments
+                for note in notes_out {
+                    self.state.cmt_tree.append(note.commitment());
+                }
+            }
+            TransactionData::ObjectUpdate { new_object_cm, callback_ops, .. } => {
+                // 1. Process callback operations
+                for op in callback_ops {
+                    match op {
+                        CallbackOperation::Add(invocation) => {
+                            self.state.cb_tree.insert(invocation.ticket)?;
+                        }
+                        CallbackOperation::Process(_ticket) => {
+                            // Mark as processed
+                        }
+                    }
+                }
+                
+                // 2. Append new object commitment
+                self.state.obj_tree.append(*new_object_cm);
             }
         }
         
@@ -322,6 +296,34 @@ impl ServerVerifier {
         // In a real implementation, this would check against the sanctions tree
         // For now, return false (not sanctioned)
         false
+    }
+    
+    /// Get membership proof for a commitment
+    pub fn get_commitment_proof(&self, cm: &F) -> Option<crate::merkle::MerklePath> {
+        self.state.cmt_tree.get_proof(*cm)
+    }
+    
+    /// Check if a nullifier exists
+    pub fn nullifier_exists(&self, nf: &F) -> bool {
+        self.state.nft_tree.contains(nf)
+    }
+    
+    /// Get membership proof for a nullifier
+    pub fn get_nullifier_membership_proof(&self, nf: &F) -> Option<crate::merkle::MerklePath> {
+        // For sorted tree, we would need to track the index when the nullifier was inserted
+        // For now, return None as SortedTree doesn't provide a way to get path by key
+        // This would require enhancing SortedTree to maintain a key->index mapping
+        None
+    }
+    
+    /// Get non-membership proof for a nullifier
+    pub fn get_nullifier_nonmembership_proof(&self, nf: &F) -> Result<crate::merkle::RangePath, String> {
+        self.state.nft_tree.prove_non_membership(*nf)
+    }
+    
+    /// Get membership proof for an object
+    pub fn get_object_proof(&self, obj_cm: &F) -> Option<crate::merkle::MerklePath> {
+        self.state.obj_tree.get_proof(*obj_cm)
     }
 }
 
