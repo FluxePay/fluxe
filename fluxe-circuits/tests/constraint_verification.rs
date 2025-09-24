@@ -537,19 +537,15 @@ fn test_compliance_state_transitions() {
     
     // Create proper merkle tree with the old object
     let mut tree = IncrementalTree::new(16);
-    let obj_old_commitment = {
-        use fluxe_core::crypto::poseidon_hash;
-        // Simplified object commitment
-        poseidon_hash(&[obj_old.state_hash, F::from(obj_old.serial), obj_old.cb_head_hash])
-    };
+    // Use the same randomness as in the circuit
+    let obj_old_randomness = F::from(1u64);
+    let obj_old_commitment = obj_old.commitment_with_randomness(&obj_old_randomness);
     tree.append(obj_old_commitment);
     let obj_path_old = tree.get_path(0).expect("Should get path");
     
     // Compute new object root after update
-    let obj_new_commitment = {
-        use fluxe_core::crypto::poseidon_hash;
-        poseidon_hash(&[obj_new.state_hash, F::from(obj_new.serial), obj_new.cb_head_hash])
-    };
+    let obj_new_randomness = F::from(2u64);
+    let obj_new_commitment = obj_new.commitment_with_randomness(&obj_new_randomness);
     
     // Simple root update for testing
     use fluxe_core::crypto::poseidon_hash;
@@ -566,6 +562,9 @@ fn test_compliance_state_transitions() {
         cb_path: None,
         cb_nonmembership: None,
         obj_path_old,
+        obj_append_witness: None,
+        obj_old_randomness: F::from(1u64),
+        obj_new_randomness: F::from(2u64),
         decrypt_key: None,
         obj_root_old: tree.root(),
         obj_root_new,
