@@ -20,8 +20,22 @@ use crate::{
 pub enum CircuitType {
     Mint,
     Burn,
-    Transfer,
+    Transfer,  // Default 1-in/2-out
+    TransferCustom(usize, usize), // (num_inputs, num_outputs)
     ObjectUpdate,
+}
+
+impl CircuitType {
+    /// Get a string identifier for file naming
+    pub fn identifier(&self) -> String {
+        match self {
+            CircuitType::Mint => "Mint".to_string(),
+            CircuitType::Burn => "Burn".to_string(),
+            CircuitType::Transfer => "Transfer_1_2".to_string(), // Default
+            CircuitType::TransferCustom(i, o) => format!("Transfer_{}_{}", i, o),
+            CircuitType::ObjectUpdate => "ObjectUpdate".to_string(),
+        }
+    }
 }
 
 /// Trusted setup parameters for a circuit
@@ -36,8 +50,8 @@ impl TrustedSetup {
     pub fn save_to_files(&self, dir: &Path, circuit_type: CircuitType) -> Result<(), std::io::Error> {
         fs::create_dir_all(dir)?;
         
-        let pk_path = dir.join(format!("{:?}_pk.bin", circuit_type));
-        let vk_path = dir.join(format!("{:?}_vk.bin", circuit_type));
+        let pk_path = dir.join(format!("{}_pk.bin", circuit_type.identifier()));
+        let vk_path = dir.join(format!("{}_vk.bin", circuit_type.identifier()));
         
         // Save proving key
         let pk_file = File::create(pk_path)?;
@@ -58,8 +72,8 @@ impl TrustedSetup {
     
     /// Load setup parameters from files
     pub fn load_from_files(dir: &Path, circuit_type: CircuitType) -> Result<Self, std::io::Error> {
-        let pk_path = dir.join(format!("{:?}_pk.bin", circuit_type));
-        let vk_path = dir.join(format!("{:?}_vk.bin", circuit_type));
+        let pk_path = dir.join(format!("{}_pk.bin", circuit_type.identifier()));
+        let vk_path = dir.join(format!("{}_vk.bin", circuit_type.identifier()));
         
         // Load proving key
         let pk_file = File::open(pk_path)?;
@@ -125,7 +139,7 @@ impl SetupManager {
     }
     
     /// Generate setup for MintCircuit
-    fn generate_mint_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
+    pub fn generate_mint_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
         use ark_ff::UniformRand;
         use fluxe_core::data_structures::{Note, IngressReceipt};
         use fluxe_core::crypto::pedersen::PedersenCommitment;
@@ -133,20 +147,31 @@ impl SetupManager {
         use ark_bls12_381::G1Projective;
         
         // Create dummy circuit for setup
+        use fluxe_core::crypto::pedersen::{PedersenParams, PedersenRandomness};
+        let params = PedersenParams::setup_value_commitment();
+        let value = 1000u64;
+        let randomness = F::from(42u64); // Use deterministic non-zero value
+        
+        let v_comm = PedersenCommitment::commit(
+            &params,
+            value,
+            &PedersenRandomness { r: randomness },
+        );
+        
         let dummy_note = Note {
             asset_type: 1,
-            v_comm: PedersenCommitment {
-                commitment: G1Projective::rand(rng).into_affine(),
-            },
-            owner_addr: F::rand(rng),
-            psi: [0u8; 32],
+            v_comm,
+            owner_addr: F::from(123u64), // Use deterministic value
+            psi: [7u8; 32],
             chain_hint: 0,
-            compliance_hash: F::rand(rng),
+            compliance_hash: F::from(1u64),
             lineage_hash: F::from(0u64),
             pool_id: 1,
             callbacks_hash: F::from(0u64),
             memo_hash: F::from(0u64),
         };
+        
+        let note_cm = dummy_note.commitment();
         
         use fluxe_core::merkle::IncrementalTree;
         let mut cmt_tree = IncrementalTree::new(16);
@@ -154,12 +179,12 @@ impl SetupManager {
         
         let dummy_circuit = MintCircuit::new(
             vec![dummy_note],
-            vec![1000],
-            vec![F::rand(rng)],
+            vec![value],
+            vec![randomness],
             IngressReceipt {
                 asset_type: 1,
-                amount: 1000u64.into(),
-                beneficiary_cm: F::rand(rng),
+                amount: value.into(),
+                beneficiary_cm: note_cm, // Use actual commitment
                 nonce: 1,
                 aux: F::from(0u64),
             },
@@ -176,33 +201,42 @@ impl SetupManager {
     }
     
     /// Generate setup for BurnCircuit
-    fn generate_burn_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
+    pub fn generate_burn_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
         use ark_ff::UniformRand;
         use fluxe_core::data_structures::{Note, ExitReceipt};
-        use fluxe_core::crypto::pedersen::PedersenCommitment;
-        use fluxe_core::merkle::{MerklePath, AppendWitness};
-        use ark_ec::CurveGroup;
-        use ark_bls12_381::G1Projective;
+        use fluxe_core::crypto::pedersen::{PedersenCommitment, PedersenParams, PedersenRandomness};
+        use fluxe_core::merkle::{MerklePath, AppendWitness, IncrementalTree, SortedTree};
+        use crate::utils::ec_helpers::{compute_owner_address_circuit_compatible, get_pk_coords_circuit_compatible};
         
-        // Generate consistent owner key and address
-        let owner_sk = F::rand(rng);
-        let owner_addr = {
-            use fluxe_core::crypto::poseidon_hash;
-            poseidon_hash(&[owner_sk])
-        };
+        // Use consistent deterministic values for setup
+        let params = PedersenParams::setup_value_commitment();
+        let value = 500u64;
+        let randomness = F::from(42u64); // Non-zero deterministic value
+        
+        let v_comm = PedersenCommitment::commit(
+            &params,
+            value,
+            &PedersenRandomness { r: randomness },
+        );
+        
+        // Generate consistent owner key and address using circuit-compatible method
+        let owner_sk = F::from(123u64);
+        let owner_addr = compute_owner_address_circuit_compatible(owner_sk);
+        let (owner_pk_x, owner_pk_y) = get_pk_coords_circuit_compatible(owner_sk);
+        
+        // Generate nullifier key
+        let nk = F::from(456u64);
         
         let dummy_note = Note {
             asset_type: 1,
-            v_comm: PedersenCommitment {
-                commitment: G1Projective::rand(rng).into_affine(),
-            },
+            v_comm,
             owner_addr,
-            psi: [0u8; 32],
+            psi: [7u8; 32],
             chain_hint: 0,
-            compliance_hash: F::rand(rng),
-            lineage_hash: F::rand(rng),
+            compliance_hash: F::from(1u64),
+            lineage_hash: F::from(1u64),
             pool_id: 1,
-            callbacks_hash: F::rand(rng),
+            callbacks_hash: F::from(1u64),
             memo_hash: F::from(0u64),
         };
         
@@ -210,79 +244,59 @@ impl SetupManager {
         let nk = F::rand(rng);
         let nf_in = dummy_note.nullifier(&nk);
         
+        // Build actual trees for proper proofs
+        let mut cmt_tree = IncrementalTree::new(16);
+        let cm = dummy_note.commitment();
+        cmt_tree.append(cm);
+        let cm_path = cmt_tree.get_proof(cm).unwrap();
+        
+        // Build NFT tree with sentinel and get non-membership proof
+        let mut nft_tree = SortedTree::new(16);
+        let _ = nft_tree.insert(F::from(0u64)); // Sentinel
+        let nft_root_old = nft_tree.root();
+        let nf_nonmembership = nft_tree.prove_non_membership(nf_in).unwrap();
+        
+        // Get insert witness
+        let nf_insert_witness_core = nft_tree.insert_with_witness(nf_in).unwrap();
+        let nf_insert_witness = crate::gadgets::sorted_insert::SortedInsertWitness {
+            target: nf_insert_witness_core.target,
+            range_proof: nf_insert_witness_core.range_proof,
+            new_leaf: nf_insert_witness_core.new_leaf,
+            updated_pred_leaf: nf_insert_witness_core.updated_pred_leaf,
+            new_leaf_path: nf_insert_witness_core.new_leaf_path,
+            pred_update_path: nf_insert_witness_core.pred_update_path,
+            height: nf_insert_witness_core.height,
+        };
+        let nft_root_new = nft_tree.root();
+        
+        // Build exit tree
+        let exit_receipt = ExitReceipt::new(1, value.into(), nf_in, 1);
+        let mut exit_tree = IncrementalTree::new(16);
+        let exit_root_old = exit_tree.root();
+        exit_tree.append(exit_receipt.hash());
+        let exit_append_witness = exit_tree.generate_append_witness(exit_receipt.hash());
+        let exit_root_new = exit_tree.root();
+        
         let dummy_circuit = BurnCircuit {
             note_in: dummy_note.clone(),
-            value_in: 1000,
-            value_randomness_in: F::rand(rng),
+            value_in: value,
+            value_randomness_in: randomness,
             owner_sk,
-            owner_pk_x: F::rand(rng),
-            owner_pk_y: F::rand(rng),
+            owner_pk_x,
+            owner_pk_y,
             nk,
-            cm_path: MerklePath {
-                leaf_index: 0,
-                siblings: vec![F::from(0u64); 32],
-                leaf: F::rand(rng),
-            },
-            nf_nonmembership: Some({
-                use fluxe_core::merkle::{RangePath, SortedLeaf};
-                RangePath {
-                    target: nf_in,
-                    low_leaf: SortedLeaf {
-                        key: F::from(0u64),
-                        next_key: F::from(u64::MAX),
-                        next_index: 1,
-                    },
-                    low_path: MerklePath {
-                        leaf_index: 0,
-                        siblings: vec![F::from(0u64); 32],
-                        leaf: F::from(0u64),
-                    },
-                }
-            }),
-            nf_insert_witness: None, // Dummy circuit doesn't need real witness
-            exit_receipt: ExitReceipt {
-                asset_type: 1,
-                amount: 500u64.into(),
-                burned_nf: nf_in,
-                nonce: 1,
-                aux: F::from(0u64),
-            },
-            exit_append_witness: AppendWitness {
-                leaf_index: 0,
-                leaf: ExitReceipt {
-                    asset_type: 1,
-                    amount: 500u64.into(),
-                    burned_nf: nf_in,
-                    nonce: 1,
-                    aux: F::from(0u64),
-                }.hash(),
-                pre_siblings: vec![F::from(0u64); 32],
-                height: 32,
-            },
-            cmt_root: F::rand(rng),
-            nft_root_old: F::from(0u64),
-            nft_root_new: {
-                // Compute using simplified method
-                use fluxe_core::crypto::poseidon_hash;
-                let binding = poseidon_hash(&[F::from(0u64), nf_in, F::from(9999u64)]);
-                poseidon_hash(&[binding, nf_in])
-            },
-            exit_root_old: F::from(0u64),
-            exit_root_new: {
-                // Compute using simplified method
-                use fluxe_core::crypto::poseidon_hash;
-                let exit_hash = ExitReceipt {
-                    asset_type: 1,
-                    amount: 500u64.into(),
-                    burned_nf: nf_in,
-                    nonce: 1,
-                    aux: F::from(0u64),
-                }.hash();
-                let binding = poseidon_hash(&[F::from(0u64), exit_hash, F::from(0u64)]);
-                poseidon_hash(&[binding, exit_hash])
-            },
+            cm_path,
+            nf_nonmembership: Some(nf_nonmembership),
+            nf_insert_witness: Some(nf_insert_witness),
+            exit_receipt,
+            exit_append_witness,
+            cmt_root: cmt_tree.root(),
+            nft_root_old,
+            nft_root_new,
+            exit_root_old,
+            exit_root_new,
             asset_type: 1,
-            amount: 500u64.into(),
+            amount: value.into(),
             nf_in,
         };
         
@@ -295,94 +309,150 @@ impl SetupManager {
     }
     
     /// Generate setup for TransferCircuit
-    fn generate_transfer_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
+    pub fn generate_transfer_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
         use ark_ff::UniformRand;
         use fluxe_core::data_structures::Note;
-        use fluxe_core::crypto::pedersen::PedersenCommitment;
-        use fluxe_core::merkle::MerklePath;
-        use ark_ec::CurveGroup;
-        use ark_bls12_381::G1Projective;
+        use fluxe_core::crypto::pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness};
+        use fluxe_core::merkle::{IncrementalTree, SortedTree};
+        use fluxe_core::crypto::poseidon_hash;
+        use crate::utils::ec_helpers::{compute_owner_address_circuit_compatible, get_pk_coords_circuit_compatible};
+        use crate::gadgets::sorted_insert::SortedInsertWitness;
         
-        // Create dummy inputs (2 notes)
+        // Setup parameters
+        let params = PedersenParams::setup_value_commitment();
+        let num_inputs = 1;
+        let num_outputs = 2;  // Match common case of payment + change
+        
+        // Build CMT tree
+        let mut cmt_tree = IncrementalTree::new(16);
+        
+        // Build NFT tree with sentinel
+        let mut nft_tree = SortedTree::new(16);
+        let _ = nft_tree.insert(F::from(0u64)); // Sentinel
+        let nft_root_old = nft_tree.root();
+        
+        // Create input notes with proper owner authentication
         let mut notes_in = Vec::new();
         let mut values_in = Vec::new();
         let mut value_randomness_in = Vec::new();
+        let mut owner_sks = Vec::new();
+        let mut owner_pks = Vec::new();
         let mut nks = Vec::new();
         let mut cm_paths = Vec::new();
         let mut nf_list = Vec::new();
+        let mut nf_nonmembership_proofs = Vec::new();
+        let mut nf_insert_witnesses = Vec::new();
         
-        for _ in 0..2 {
-            notes_in.push(Note {
-                asset_type: 1,
-                v_comm: PedersenCommitment {
-                    commitment: G1Projective::rand(rng).into_affine(),
-                },
-                owner_addr: F::rand(rng),
-                psi: [0u8; 32],
-                chain_hint: 0,
-                compliance_hash: F::rand(rng),
-                lineage_hash: F::rand(rng),
-                pool_id: 1,
-                callbacks_hash: F::rand(rng),
-                memo_hash: F::from(0u64),
-            });
-            values_in.push(500);
-            value_randomness_in.push(F::rand(rng));
-            nks.push(F::rand(rng));
-            cm_paths.push(MerklePath {
-                leaf_index: 0,
-                siblings: vec![F::from(0u64); 32],
-                leaf: F::rand(rng),
-            });
-            nf_list.push(F::rand(rng));
+        for i in 0..num_inputs {
+            let value = 500u64;
+            let randomness = F::from(42u64 + i as u64);
+            let v_comm = PedersenCommitment::commit(
+                &params,
+                value,
+                &PedersenRandomness { r: randomness },
+            );
+            
+            let owner_sk = F::from(123u64);
+            let owner_addr = compute_owner_address_circuit_compatible(owner_sk);
+            let (pk_x, pk_y) = get_pk_coords_circuit_compatible(owner_sk);
+            
+            let nk = F::from(456u64);
+            let psi_bytes = [7u8 + i as u8; 32];
+            
+            let mut note = Note::new(1, v_comm, owner_addr, psi_bytes, 1);
+            note.compliance_hash = F::from(1u64);
+            note.callbacks_hash = F::from(1u64);
+            note.lineage_hash = F::from(1u64);
+            note.memo_hash = F::from(0u64);
+            
+            let cm = note.commitment();
+            cmt_tree.append(cm);
+            let path = cmt_tree.get_path(0).unwrap();
+            
+            let nf = note.nullifier(&nk);
+            
+            notes_in.push(note);
+            values_in.push(value);
+            value_randomness_in.push(randomness);
+            owner_sks.push(owner_sk);
+            owner_pks.push((pk_x, pk_y));
+            nks.push(nk);
+            cm_paths.push(path);
+            nf_list.push(nf);
         }
         
-        // Create dummy outputs (2 notes)
+        // Generate non-membership proofs for nullifiers
+        for nf in &nf_list {
+            let nm_proof = nft_tree.prove_non_membership(*nf).unwrap();
+            nf_nonmembership_proofs.push(Some(nm_proof));
+        }
+        
+        // Generate insert witnesses
+        for nf in &nf_list {
+            let insert_witness_core = nft_tree.insert_with_witness(*nf).unwrap();
+            let insert_witness = SortedInsertWitness {
+                target: insert_witness_core.target,
+                range_proof: insert_witness_core.range_proof,
+                new_leaf: insert_witness_core.new_leaf,
+                updated_pred_leaf: insert_witness_core.updated_pred_leaf,
+                new_leaf_path: insert_witness_core.new_leaf_path,
+                pred_update_path: insert_witness_core.pred_update_path,
+                height: insert_witness_core.height,
+            };
+            nf_insert_witnesses.push(insert_witness);
+        }
+        
+        let cmt_root_old = cmt_tree.root();
+        let nft_root_new = nft_tree.root();
+        
+        // Create output notes
         let mut notes_out = Vec::new();
         let mut values_out = Vec::new();
         let mut value_randomness_out = Vec::new();
         let mut cm_list = Vec::new();
+        let mut cmt_appends_out = Vec::new();
         
-        for _ in 0..2 {
-            notes_out.push(Note {
-                asset_type: 1,
-                v_comm: PedersenCommitment {
-                    commitment: G1Projective::rand(rng).into_affine(),
-                },
-                owner_addr: F::rand(rng),
-                psi: [0u8; 32],
-                chain_hint: 0,
-                compliance_hash: F::rand(rng),
-                lineage_hash: F::rand(rng),
-                pool_id: 1,
-                callbacks_hash: F::from(0u64),
-                memo_hash: F::from(0u64),
-            });
-            values_out.push(495);
-            value_randomness_out.push(F::rand(rng));
-            cm_list.push(F::rand(rng));
+        let total_value: u64 = values_in.iter().sum();
+        let fee = 10u64;
+        let value_per_output = (total_value - fee) / num_outputs as u64;
+        
+        for i in 0..num_outputs {
+            let randomness = F::from(1000u64 + i as u64);
+            let v_comm = PedersenCommitment::commit(
+                &params,
+                value_per_output,
+                &PedersenRandomness { r: randomness },
+            );
+            
+            let recipient_sk = F::from(2000u64 + i as u64);
+            let recipient_addr = compute_owner_address_circuit_compatible(recipient_sk);
+            
+            // Compute lineage hash for output note
+            let parent_lineages: Vec<F> = notes_in.iter()
+                .map(|n| n.lineage_hash)
+                .collect();
+            let mut lineage_input = parent_lineages;
+            lineage_input.push(F::from(i as u64));
+            let expected_lineage = poseidon_hash(&lineage_input);
+            
+            let mut note = Note::new(1, v_comm, recipient_addr, [0u8; 32], 1);
+            note.compliance_hash = F::from(1u64);
+            note.callbacks_hash = F::from(1u64);
+            note.lineage_hash = expected_lineage;
+            note.memo_hash = F::from(0u64);
+            
+            let cm = note.commitment();
+            let append_witness = cmt_tree.generate_append_witness(cm);
+            cmt_appends_out.push(append_witness);
+            cmt_tree.append(cm);
+            
+            notes_out.push(note);
+            values_out.push(value_per_output);
+            value_randomness_out.push(randomness);
+            cm_list.push(cm);
         }
         
-        // Create dummy non-membership proofs
-        use fluxe_core::merkle::{SortedLeaf, RangePath};
-        let mut nm_proofs = Vec::new();
-        for _ in 0..2 {
-            let low_leaf = SortedLeaf {
-                key: F::rand(rng),
-                next_key: F::rand(rng),
-                next_index: 0,
-            };
-            let low_path = MerklePath {
-                leaf_index: 0,
-                siblings: vec![F::rand(rng); 16],
-                leaf: F::rand(rng),
-            };
-            nm_proofs.push(Some(RangePath {
-                low_leaf,
-                low_path,
-                target: F::rand(rng),
-            }));
-        }
+        let cmt_root_new = cmt_tree.root();
         
         let dummy_circuit = TransferCircuit {
             notes_in,
@@ -392,25 +462,209 @@ impl SetupManager {
             values_out,
             value_randomness_out,
             nks,
-            owner_sks: vec![F::rand(rng), F::rand(rng)],
-            owner_pks: vec![(F::rand(rng), F::rand(rng)), (F::rand(rng), F::rand(rng))],
+            owner_sks,
+            owner_pks,
             cm_paths,
-            nf_nonmembership_proofs: nm_proofs.clone(),
-            sanctions_nm_proofs_in: vec![None; 2],
-            sanctions_nm_proofs_out: vec![None; 2],
+            nf_nonmembership_proofs: nf_nonmembership_proofs.clone(),
+            sanctions_nm_proofs_in: vec![None; num_inputs],
+            sanctions_nm_proofs_out: vec![None; num_outputs],
             cmt_paths_out: vec![],
-            nf_nonmembership: nm_proofs,
+            nf_nonmembership: nf_nonmembership_proofs,
             source_pool_policies: vec![],
             dest_pool_policies: vec![],
             pool_policy_paths: vec![],
-            cmt_appends_out: vec![],
-            nf_insert_witnesses: vec![],
-            cmt_root_old: F::rand(rng),
-            cmt_root_new: F::rand(rng),
-            nft_root_old: F::rand(rng),
-            nft_root_new: F::rand(rng),
-            sanctions_root: F::rand(rng),
-            pool_rules_root: F::rand(rng),
+            cmt_appends_out,
+            nf_insert_witnesses,
+            cmt_root_old,
+            cmt_root_new,
+            nft_root_old,
+            nft_root_new,
+            sanctions_root: F::from(999999u64),
+            pool_rules_root: F::from(888888u64),
+            nf_list,
+            cm_list,
+            fee: fee.into(),
+        };
+        
+        let (proving_key, verifying_key) = Groth16::<Bls12_381>::circuit_specific_setup(dummy_circuit, rng)?;
+        
+        Ok(TrustedSetup {
+            proving_key,
+            verifying_key,
+        })
+    }
+    
+    /// Generate setup for TransferCircuit with custom input/output counts
+    pub fn generate_transfer_setup_custom<R: RngCore + CryptoRng>(&self, rng: &mut R, num_inputs: usize, num_outputs: usize) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
+        use ark_ff::UniformRand;
+        use fluxe_core::data_structures::Note;
+        use fluxe_core::crypto::pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness};
+        use fluxe_core::merkle::{IncrementalTree, SortedTree};
+        use fluxe_core::crypto::poseidon_hash;
+        use crate::utils::ec_helpers::{compute_owner_address_circuit_compatible, get_pk_coords_circuit_compatible};
+        use crate::gadgets::sorted_insert::SortedInsertWitness;
+        
+        // Setup parameters
+        let params = PedersenParams::setup_value_commitment();
+        
+        // Build CMT tree
+        let mut cmt_tree = IncrementalTree::new(16);
+        
+        // Build NFT tree with sentinel
+        let mut nft_tree = SortedTree::new(16);
+        let _ = nft_tree.insert(F::from(0u64)); // Sentinel
+        let nft_root_old = nft_tree.root();
+        
+        // Create input notes with proper owner authentication
+        let mut notes_in = Vec::new();
+        let mut values_in = Vec::new();
+        let mut value_randomness_in = Vec::new();
+        let mut owner_sks = Vec::new();
+        let mut owner_pks = Vec::new();
+        let mut nks = Vec::new();
+        let mut cm_paths = Vec::new();
+        let mut nf_list = Vec::new();
+        let mut nf_nonmembership_proofs = Vec::new();
+        let mut nf_insert_witnesses = Vec::new();
+        
+        for i in 0..num_inputs {
+            let value = 500u64;
+            let randomness = F::from(42u64 + i as u64);
+            let v_comm = PedersenCommitment::commit(
+                &params,
+                value,
+                &PedersenRandomness { r: randomness },
+            );
+            
+            let owner_sk = F::from(123u64);
+            let owner_addr = compute_owner_address_circuit_compatible(owner_sk);
+            let (pk_x, pk_y) = get_pk_coords_circuit_compatible(owner_sk);
+            
+            let nk = F::from(456u64);
+            let psi_bytes = [7u8 + i as u8; 32];
+            
+            let mut note = Note::new(1, v_comm, owner_addr, psi_bytes, 1);
+            note.compliance_hash = F::from(1u64);
+            note.callbacks_hash = F::from(1u64);
+            note.lineage_hash = F::from(1u64);
+            note.memo_hash = F::from(0u64);
+            
+            let cm = note.commitment();
+            cmt_tree.append(cm);
+            let path = cmt_tree.get_path(i).unwrap();
+            
+            let nf = note.nullifier(&nk);
+            
+            notes_in.push(note);
+            values_in.push(value);
+            value_randomness_in.push(randomness);
+            owner_sks.push(owner_sk);
+            owner_pks.push((pk_x, pk_y));
+            nks.push(nk);
+            cm_paths.push(path);
+            nf_list.push(nf);
+        }
+        
+        // Generate non-membership proofs for nullifiers
+        for nf in &nf_list {
+            let nm_proof = nft_tree.prove_non_membership(*nf).unwrap();
+            nf_nonmembership_proofs.push(Some(nm_proof));
+        }
+        
+        // Generate insert witnesses
+        for nf in &nf_list {
+            let insert_witness_core = nft_tree.insert_with_witness(*nf).unwrap();
+            let insert_witness = SortedInsertWitness {
+                target: insert_witness_core.target,
+                range_proof: insert_witness_core.range_proof,
+                new_leaf: insert_witness_core.new_leaf,
+                updated_pred_leaf: insert_witness_core.updated_pred_leaf,
+                new_leaf_path: insert_witness_core.new_leaf_path,
+                pred_update_path: insert_witness_core.pred_update_path,
+                height: insert_witness_core.height,
+            };
+            nf_insert_witnesses.push(insert_witness);
+        }
+        
+        let cmt_root_old = cmt_tree.root();
+        let nft_root_new = nft_tree.root();
+        
+        // Create output notes
+        let mut notes_out = Vec::new();
+        let mut values_out = Vec::new();
+        let mut value_randomness_out = Vec::new();
+        let mut cm_list = Vec::new();
+        let mut cmt_appends_out = Vec::new();
+        
+        let total_value: u64 = values_in.iter().sum();
+        let fee = 10u64;
+        let value_per_output = (total_value - fee) / num_outputs as u64;
+        
+        for i in 0..num_outputs {
+            let randomness = F::from(1000u64 + i as u64);
+            let v_comm = PedersenCommitment::commit(
+                &params,
+                value_per_output,
+                &PedersenRandomness { r: randomness },
+            );
+            
+            let recipient_sk = F::from(2000u64 + i as u64);
+            let recipient_addr = compute_owner_address_circuit_compatible(recipient_sk);
+            
+            // Compute lineage hash for output note
+            let parent_lineages: Vec<F> = notes_in.iter()
+                .map(|n| n.lineage_hash)
+                .collect();
+            let mut lineage_input = parent_lineages;
+            lineage_input.push(F::from(i as u64));
+            let expected_lineage = poseidon_hash(&lineage_input);
+            
+            let mut note = Note::new(1, v_comm, recipient_addr, [0u8; 32], 1);
+            note.compliance_hash = F::from(1u64);
+            note.callbacks_hash = F::from(1u64);
+            note.lineage_hash = expected_lineage;
+            note.memo_hash = F::from(0u64);
+            
+            let cm = note.commitment();
+            let append_witness = cmt_tree.generate_append_witness(cm);
+            cmt_appends_out.push(append_witness);
+            cmt_tree.append(cm);
+            
+            notes_out.push(note);
+            values_out.push(value_per_output);
+            value_randomness_out.push(randomness);
+            cm_list.push(cm);
+        }
+        
+        let cmt_root_new = cmt_tree.root();
+        
+        let dummy_circuit = TransferCircuit {
+            notes_in,
+            values_in,
+            value_randomness_in,
+            notes_out,
+            values_out,
+            value_randomness_out,
+            nks,
+            owner_sks,
+            owner_pks,
+            cm_paths,
+            nf_nonmembership_proofs: nf_nonmembership_proofs.clone(),
+            sanctions_nm_proofs_in: vec![None; num_inputs],
+            sanctions_nm_proofs_out: vec![None; num_outputs],
+            cmt_paths_out: vec![],
+            nf_nonmembership: nf_nonmembership_proofs,
+            source_pool_policies: vec![],
+            dest_pool_policies: vec![],
+            pool_policy_paths: vec![],
+            cmt_appends_out,
+            nf_insert_witnesses,
+            cmt_root_old,
+            cmt_root_new,
+            nft_root_old,
+            nft_root_new,
+            sanctions_root: F::from(999999u64),
+            pool_rules_root: F::from(888888u64),
             nf_list,
             cm_list,
             fee: 10u64.into(),
@@ -425,28 +679,47 @@ impl SetupManager {
     }
     
     /// Generate setup for ObjectUpdateCircuit
-    fn generate_object_update_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
+    pub fn generate_object_update_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
         use ark_ff::UniformRand;
         use fluxe_core::data_structures::{ComplianceState, ZkObject};
-        use fluxe_core::merkle::MerklePath;
+        use fluxe_core::merkle::{IncrementalTree, SortedTree};
         
-        let state_old = ComplianceState::new();
-        let state_new = ComplianceState {
-            level: 2,
-            ..state_old.clone()
-        };
+        // Create states
+        let state_old = ComplianceState::new_verified(1);
+        let mut state_new = state_old.clone();
+        state_new.level = 2;
+        state_new.risk_score = 50;
         
+        // Create objects
         let obj_old = ZkObject {
             state_hash: state_old.hash(),
-            serial: 100,
-            cb_head_hash: F::rand(rng),
+            serial: 1,
+            cb_head_hash: F::from(0u64),
         };
         
         let obj_new = ZkObject {
             state_hash: state_new.hash(),
-            serial: 101,
-            cb_head_hash: obj_old.cb_head_hash,
+            serial: 2,
+            cb_head_hash: F::from(0u64),
         };
+        
+        // Build object tree
+        let mut obj_tree = IncrementalTree::new(16);
+        let obj_old_cm = obj_old.commitment_with_randomness(&F::from(42u64));
+        obj_tree.append(obj_old_cm);
+        let obj_path_old = obj_tree.get_path(0).unwrap();
+        let obj_root_old = obj_tree.root();
+        
+        // Get append witness for new object
+        let obj_new_cm = obj_new.commitment_with_randomness(&F::from(43u64));
+        let obj_append_witness = obj_tree.generate_append_witness(obj_new_cm);
+        obj_tree.append(obj_new_cm);
+        let obj_root_new = obj_tree.root();
+        
+        // Build callback tree with sentinel
+        let mut cb_tree = SortedTree::new(16);
+        let _ = cb_tree.insert(F::from(0u64)); // Sentinel
+        let cb_root = cb_tree.root();
         
         let dummy_circuit = ObjectUpdateCircuit {
             obj_old,
@@ -458,16 +731,15 @@ impl SetupManager {
             callback_signature: None,
             cb_path: None,
             cb_nonmembership: None,
-            obj_path_old: MerklePath {
-                leaf_index: 0,
-                siblings: vec![F::from(0u64); 32],
-                leaf: F::rand(rng),
-            },
+            obj_path_old,
+            obj_append_witness: Some(obj_append_witness),
+            obj_old_randomness: F::from(42u64),
+            obj_new_randomness: F::from(43u64),
             decrypt_key: None,
-            obj_root_old: F::rand(rng),
-            obj_root_new: F::rand(rng),
-            cb_root: F::rand(rng),
-            current_time: 2000,
+            obj_root_old,
+            obj_root_new,
+            cb_root,
+            current_time: 1000,
         };
         
         let (proving_key, verifying_key) = Groth16::<Bls12_381>::circuit_specific_setup(dummy_circuit, rng)?;
