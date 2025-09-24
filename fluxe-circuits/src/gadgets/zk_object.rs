@@ -5,6 +5,7 @@ use ark_r1cs_std::{
 };
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use fluxe_core::data_structures::{ZkObject, ComplianceState};
+use fluxe_core::crypto::{domain_sep_to_field, DOM_OBJ};
 
 use super::poseidon::poseidon_hash_zk;
 
@@ -29,13 +30,23 @@ impl ZkObjectVar {
         })
     }
     
-    /// Compute commitment to this object
-    pub fn commitment(&self) -> Result<FpVar<F>, SynthesisError> {
+    /// Compute commitment to this object with randomness
+    pub fn commitment_with_randomness(&self, r_obj: &FpVar<F>) -> Result<FpVar<F>, SynthesisError> {
+        let dom_obj = FpVar::constant(domain_sep_to_field(DOM_OBJ));
         poseidon_hash_zk(&[
+            dom_obj,
             self.state_hash.clone(),
             self.serial.clone(),
             self.cb_head_hash.clone(),
+            r_obj.clone(),
         ])
+    }
+    
+    /// Compute commitment (requires randomness to be provided separately)
+    pub fn commitment(&self) -> Result<FpVar<F>, SynthesisError> {
+        // This is a placeholder - actual randomness must be provided
+        // Should not be used directly; use commitment_with_randomness instead
+        Err(SynthesisError::AssignmentMissing)
     }
 }
 
