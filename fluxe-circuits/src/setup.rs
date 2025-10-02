@@ -140,11 +140,11 @@ impl SetupManager {
     
     /// Generate setup for MintCircuit
     pub fn generate_mint_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
-        use ark_ff::UniformRand;
+        
         use fluxe_core::data_structures::{Note, IngressReceipt};
         use fluxe_core::crypto::pedersen::PedersenCommitment;
-        use ark_ec::CurveGroup;
-        use ark_bls12_381::G1Projective;
+        
+        
         
         // Create dummy circuit for setup
         use fluxe_core::crypto::pedersen::{PedersenParams, PedersenRandomness};
@@ -205,7 +205,7 @@ impl SetupManager {
         use ark_ff::UniformRand;
         use fluxe_core::data_structures::{Note, ExitReceipt};
         use fluxe_core::crypto::pedersen::{PedersenCommitment, PedersenParams, PedersenRandomness};
-        use fluxe_core::merkle::{MerklePath, AppendWitness, IncrementalTree, SortedTree};
+        use fluxe_core::merkle::{IncrementalTree, SortedTree};
         use crate::utils::ec_helpers::{compute_owner_address_circuit_compatible, get_pk_coords_circuit_compatible};
         
         // Use consistent deterministic values for setup
@@ -310,7 +310,7 @@ impl SetupManager {
     
     /// Generate setup for TransferCircuit
     pub fn generate_transfer_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
-        use ark_ff::UniformRand;
+        
         use fluxe_core::data_structures::Note;
         use fluxe_core::crypto::pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness};
         use fluxe_core::merkle::{IncrementalTree, SortedTree};
@@ -496,7 +496,7 @@ impl SetupManager {
     
     /// Generate setup for TransferCircuit with custom input/output counts
     pub fn generate_transfer_setup_custom<R: RngCore + CryptoRng>(&self, rng: &mut R, num_inputs: usize, num_outputs: usize) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
-        use ark_ff::UniformRand;
+        
         use fluxe_core::data_structures::Note;
         use fluxe_core::crypto::pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness};
         use fluxe_core::merkle::{IncrementalTree, SortedTree};
@@ -680,7 +680,7 @@ impl SetupManager {
     
     /// Generate setup for ObjectUpdateCircuit
     pub fn generate_object_update_setup<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Result<TrustedSetup, Box<dyn std::error::Error>> {
-        use ark_ff::UniformRand;
+        
         use fluxe_core::data_structures::{ComplianceState, ZkObject};
         use fluxe_core::merkle::{IncrementalTree, SortedTree};
         

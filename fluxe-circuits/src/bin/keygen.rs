@@ -4,9 +4,9 @@ use std::path::Path;
 use std::env;
 
 use fluxe_circuits::setup::{CircuitType, SetupManager, TrustedSetup};
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
+use ark_serialize::CanonicalSerialize;
 use std::fs::File;
-use std::io::{Write, Read};
+use std::io::Write;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(dir)?;
     
     let mut rng = ChaCha20Rng::seed_from_u64(seed);
-    let mut setup_manager = SetupManager::new();
+    let setup_manager = SetupManager::new();
     
     // Helper function to save setup to files
     fn save_setup_to_files(setup: &TrustedSetup, dir: &Path, circuit_type: CircuitType) -> Result<(), Box<dyn std::error::Error>> {

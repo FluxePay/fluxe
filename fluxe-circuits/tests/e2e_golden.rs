@@ -3,12 +3,10 @@
 /// with actual proof generation and verification
 
 use ark_bls12_381::Fr as F;
-use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
-use ark_serialize::CanonicalDeserialize;
+use ark_groth16::Groth16;
 use ark_snark::SNARK;
 use ark_std::rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use rand::thread_rng;
 use std::collections::HashMap;
 
 use fluxe_circuits::{
@@ -16,21 +14,19 @@ use fluxe_circuits::{
     burn::BurnCircuit,
     transfer::TransferCircuit,
     object_update::ObjectUpdateCircuit,
-    setup::{CircuitType, TrustedSetup, SetupManager},
+    setup::TrustedSetup,
     circuits::FluxeCircuit,
     utils::ec_helpers::{compute_owner_address_circuit_compatible, get_pk_coords_circuit_compatible},
 };
 
 use fluxe_core::{
-    data_structures::{Note, IngressReceipt, ExitReceipt, ComplianceState, ZkObject, CallbackEntry},
+    data_structures::{Note, IngressReceipt, ExitReceipt, ComplianceState, ZkObject},
     crypto::{
         pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness},
         poseidon_hash,
     },
     merkle::{IncrementalTree, SortedTree},
     types::*,
-    server_verifier::ServerVerifier,
-    state_manager::StateManager,
 };
 
 struct TestContext {
@@ -61,7 +57,7 @@ impl TestContext {
         let mut rng = ChaCha20Rng::seed_from_u64(42);
         
         // Generate setup keys for all circuits
-        let mut setup_manager = fluxe_circuits::setup::SetupManager::new();
+        let setup_manager = fluxe_circuits::setup::SetupManager::new();
         let mint_keys = setup_manager.generate_mint_setup(&mut rng).unwrap();
         let burn_keys = setup_manager.generate_burn_setup(&mut rng).unwrap();
         let transfer_keys = setup_manager.generate_transfer_setup(&mut rng).unwrap(); // Default 1-in/2-out
