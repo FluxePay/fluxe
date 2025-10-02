@@ -161,45 +161,7 @@ pub enum TransactionType {
     ObjectUpdate,
 }
 
-/// Result type for Fluxe operations
-pub type FluxeResult<T> = Result<T, FluxeError>;
 
-/// Error types for Fluxe
-#[derive(Debug, thiserror::Error)]
-pub enum FluxeError {
-    #[error("Invalid proof: {0}")]
-    InvalidProof(String),
-    
-    #[error("Double spend detected: nullifier {0:?} already exists")]
-    DoubleSpend(Nullifier),
-    
-    #[error("Insufficient balance")]
-    InsufficientBalance,
-    
-    #[error("Compliance violation: {0}")]
-    ComplianceViolation(String),
-    
-    #[error("Invalid merkle path")]
-    InvalidMerklePath,
-    
-    #[error("Serialization error: {0}")]
-    SerializationError(String),
-    
-    #[error("Other error: {0}")]
-    Other(String),
-}
-
-impl From<String> for FluxeError {
-    fn from(s: String) -> Self {
-        FluxeError::Other(s)
-    }
-}
-
-impl From<&str> for FluxeError {
-    fn from(s: &str) -> Self {
-        FluxeError::Other(s.to_string())
-    }
-}
 
 // CallbackInvocation is defined in data_structures::zk_object - avoiding duplicate definition
 

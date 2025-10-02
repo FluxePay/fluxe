@@ -1,6 +1,7 @@
 use crate::crypto::poseidon_hash;
 use crate::data_structures::{IngressReceipt, ExitReceipt, CallbackInvocation};
-use crate::merkle::{IncrementalTree, SortedTree, MerklePath, TreeParams};
+use crate::errors::StateError;
+use crate::merkle::{IncrementalTree, SortedTree, MerklePath, TreeParams, SortedLeaf};
 use crate::types::{*, StateRoots};
 use ark_bls12_381::Fr as F;
 use ark_ff::Zero;
@@ -113,7 +114,7 @@ impl StateManager {
         
         // Check nullifier doesn't exist (prevent double spend)
         if self.nft_tree.contains(&nullifier) {
-            return Err(StateError::DoubleSpend(nullifier));
+            return Err(StateError::DoubleSpend(format!("{:?}", nullifier)));
         }
         
         // Add nullifier to NFT tree
@@ -156,7 +157,7 @@ impl StateManager {
         // Check all nullifiers are fresh
         for &nf in input_nullifiers {
             if self.nft_tree.contains(&nf) {
-                return Err(StateError::DoubleSpend(nf));
+                return Err(StateError::DoubleSpend(format!("{:?}", nf)));
             }
         }
         
@@ -283,26 +284,7 @@ pub enum StateOperation {
     ExitAppend(F),
 }
 
-/// State manager errors
-#[derive(Debug, Clone)]
-pub enum StateError {
-    DoubleSpend(Nullifier),
-    InsufficientSupply,
-    TreeError(String),
-    InvalidProof,
-}
 
-impl From<crate::merkle::TreeError> for StateError {
-    fn from(e: crate::merkle::TreeError) -> Self {
-        StateError::TreeError(format!("{:?}", e))
-    }
-}
-
-impl From<String> for StateError {
-    fn from(e: String) -> Self {
-        StateError::TreeError(e)
-    }
-}
 
 /// Non-membership proof for nullifiers
 #[derive(Clone, Debug)]
@@ -313,24 +295,7 @@ pub struct NonMembershipProof {
     pub low_path: MerklePath,
 }
 
-/// Sorted tree leaf for non-membership proofs
-#[derive(Clone, Debug)]
-pub struct SortedLeaf {
-    pub key: F,
-    pub next_key: F,
-    pub next_index: Option<u64>,
-}
 
-impl SortedLeaf {
-    /// Hash the leaf
-    pub fn hash(&self) -> F {
-        let mut inputs = vec![self.key, self.next_key];
-        if let Some(idx) = self.next_index {
-            inputs.push(F::from(idx));
-        }
-        poseidon_hash(&inputs)
-    }
-}
 
 #[cfg(test)]
 mod tests {

@@ -455,16 +455,12 @@ impl SortedTree {
     
     /// Get non-membership proof (wrapper for state manager compatibility)
     pub fn get_non_membership_proof(&self, nullifier: F) -> Option<crate::state_manager::NonMembershipProof> {
-        use crate::state_manager::{NonMembershipProof, SortedLeaf as StateSortedLeaf};
-        
+        use crate::state_manager::NonMembershipProof;
+
         let range_path = self.prove_non_membership(nullifier).ok()?;
-        
-        // Convert to state manager types
-        let low_leaf = StateSortedLeaf {
-            key: range_path.low_leaf.key,
-            next_key: range_path.low_leaf.next_key,
-            next_index: Some(range_path.low_leaf.next_index as u64),
-        };
+
+        // low_leaf is already a SortedLeaf from this module
+        let low_leaf = range_path.low_leaf.clone();
         
         Some(NonMembershipProof {
             low_leaf,
