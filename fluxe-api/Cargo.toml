@@ -11,9 +11,12 @@ ark-bls12-381 = { workspace = true }
 ark-ff = { workspace = true }
 ark-groth16 = { workspace = true }
 ark-serialize = { workspace = true }
+ark-snark = { workspace = true }
 hex = "0.4"
 axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+reqwest = { version = "0.11", features = ["json"] }
+rand = { workspace = true }
