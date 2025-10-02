@@ -5,6 +5,7 @@ use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use fluxe_core::{
     data_structures::{CallbackEntry, CallbackInvocation, ComplianceState, ZkObject},
+    errors::FluxeError,
     merkle::{MerklePath, RangePath, AppendWitness},
     types::*,
 };

@@ -4,6 +4,7 @@ use ark_groth16::r1cs_to_qap::LibsnarkReduction;
 use ark_relations::r1cs::ConstraintSynthesizer;
 use ark_snark::SNARK;
 use fluxe_core::types::*;
+use fluxe_core::errors::FluxeError;
 use rand::{CryptoRng, RngCore};
 use std::marker::PhantomData;
 
@@ -41,7 +42,7 @@ impl<C: FluxeCircuit> CircuitSetup<C> {
         circuit.verify_public_inputs()?;
         
         Groth16::<Bls12_381, LibsnarkReduction>::prove(&self.proving_key, circuit, rng)
-            .map_err(|e| FluxeError::InvalidProof(format!("Proof generation failed: {}", e)))
+            .map_err(|e| FluxeError::Verification(format!("Proof generation failed: {}", e)))
     }
     
     /// Verify a proof
@@ -49,7 +50,7 @@ impl<C: FluxeCircuit> CircuitSetup<C> {
         let pvk = PreparedVerifyingKey::from(self.verifying_key.clone());
         
         Groth16::<Bls12_381, LibsnarkReduction>::verify_with_processed_vk(&pvk, public_inputs, proof)
-            .map_err(|e| FluxeError::InvalidProof(format!("Verification failed: {}", e)))
+            .map_err(|e| FluxeError::Verification(format!("Verification failed: {}", e)))
     }
 }
 
@@ -115,7 +116,7 @@ impl TransactionProof {
         let pvk = PreparedVerifyingKey::from(vk.clone());
         
         Groth16::<Bls12_381, LibsnarkReduction>::verify_with_processed_vk(&pvk, &self.public_inputs, &self.proof)
-            .map_err(|e| FluxeError::InvalidProof(format!("Verification failed: {}", e)))
+            .map_err(|e| FluxeError::Verification(format!("Verification failed: {}", e)))
     }
 }
 

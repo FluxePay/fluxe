@@ -5,6 +5,7 @@ use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use fluxe_core::{
     data_structures::{ExitReceipt, Note},
+    errors::FluxeError,
     merkle::{MerklePath, RangePath, AppendWitness},
     types::*,
 };
@@ -300,7 +301,7 @@ impl FluxeCircuit for BurnCircuit {
     fn verify_public_inputs(&self) -> Result<(), FluxeError> {
         // Verify amount doesn't exceed note value
         if self.amount > Amount::from(self.value_in) {
-            return Err(FluxeError::InsufficientBalance);
+            return Err(FluxeError::Other("Insufficient balance for burn".to_string()));
         }
         
         // Verify asset types match

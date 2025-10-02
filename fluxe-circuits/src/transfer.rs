@@ -5,6 +5,7 @@ use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use fluxe_core::{
     data_structures::Note,
+    errors::FluxeError,
     merkle::{MerklePath, RangePath, AppendWitness},
     types::*,
 };
@@ -774,7 +775,7 @@ impl FluxeCircuit for TransferCircuit {
         let sum_out: u128 = self.values_out.iter().map(|&v| v as u128).sum();
         
         if Amount::from(sum_in) < Amount::from(sum_out) + self.fee {
-            return Err(FluxeError::InsufficientBalance);
+            return Err(FluxeError::Other("Insufficient balance for transfer".to_string()));
         }
         
         // Verify matching lengths

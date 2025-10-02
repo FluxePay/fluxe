@@ -6,6 +6,7 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 use fluxe_core::{
     crypto::poseidon_hash,
     data_structures::{IngressReceipt, Note},
+    errors::FluxeError,
     merkle::{IncrementalTree, AppendWitness},
     types::*,
 };
