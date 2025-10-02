@@ -7,6 +7,7 @@ use axum::{
 };
 use fluxe_core::{
     data_structures::{IngressReceipt, ExitReceipt},
+    errors::FluxeError,
     server_verifier::{ServerVerifier, TransactionBuilder, TransactionData},
     types::*,
 };
@@ -21,7 +22,7 @@ pub struct FluxeApi {
 }
 
 /// API response wrapper
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ApiResponse<T> {
     pub success: bool,
     pub data: Option<T>,
@@ -47,7 +48,7 @@ impl<T> ApiResponse<T> {
 }
 
 /// Transaction submission requests
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SubmitMintRequest {
     pub asset_type: AssetType,
     pub amount: u64,
@@ -56,7 +57,7 @@ pub struct SubmitMintRequest {
     pub notes_out: Vec<SerializableNote>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SubmitBurnRequest {
     pub asset_type: AssetType,
     pub amount: u64,
@@ -65,7 +66,7 @@ pub struct SubmitBurnRequest {
     pub public_inputs: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SubmitTransferRequest {
     pub nullifiers: Vec<String>, // Hex-encoded
     pub proof: Vec<u8>,
@@ -73,7 +74,7 @@ pub struct SubmitTransferRequest {
     pub notes_out: Vec<SerializableNote>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SubmitObjectUpdateRequest {
     pub old_object_cm: String, // Hex-encoded
     pub new_object_cm: String,
@@ -102,7 +103,7 @@ pub struct SerializableCallbackOp {
 }
 
 /// State query responses
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct StateRootsResponse {
     pub cmt_root: String,
     pub nft_root: String,
@@ -114,7 +115,7 @@ pub struct StateRootsResponse {
     pub pool_rules_root: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SupplyResponse {
     pub asset_type: AssetType,
     pub minted_total: u64,
@@ -122,7 +123,7 @@ pub struct SupplyResponse {
     pub current_supply: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ProofResponse {
     pub exists: bool,
     pub path: Option<Vec<String>>, // Hex-encoded
@@ -641,8 +642,8 @@ fn compute_notes_commitment(notes: &[fluxe_core::data_structures::Note]) -> ark_
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_ff::Field;
-    use ark_serialize::CanonicalSerialize;
+    
+    
 
     #[test]
     fn test_parse_field_from_hex() {
