@@ -1,5 +1,7 @@
 use crate::{
     data_structures::{ExitReceipt, IngressReceipt, Note},
+    errors::{FluxeError, StateError},
+    logging::PerfTimer,
     state_manager::StateManager,
     types::*,
 };
@@ -7,6 +9,7 @@ use ark_bls12_381::Fr as F;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_serialize::CanonicalSerialize;
 use ark_snark::SNARK;
+use tracing::{debug, error, info, instrument, trace, warn};
 
 /// Server-side batch verifier implementing section 12.4 of the spec
 /// Verifies client proofs and deterministically reapplies Merkle operations
@@ -102,12 +105,18 @@ impl ServerVerifier {
     }
     
     /// Process the entire batch and produce a block
+    #[instrument(skip(self), fields(batch_id = %self.pending_batch.batch_id, tx_count = self.pending_batch.transactions.len()))]
     pub fn process_batch(&mut self) -> Result<BlockHeader, FluxeError> {
+        info!("Processing batch {} with {} transactions", self.pending_batch.batch_id, self.pending_batch.transactions.len());
+        let _timer = PerfTimer::new(format!("batch_{}_processing", self.pending_batch.batch_id));
+
         if self.pending_batch.transactions.is_empty() {
+            warn!("Batch {} is empty", self.pending_batch.batch_id);
             return Err(FluxeError::Other("No transactions in batch".to_string()));
         }
-        
+
         let prev_roots = self.state.get_roots();
+        debug!("Previous roots: CMT={:?}, NFT={:?}", prev_roots.cmt_root, prev_roots.nft_root);
         
         // Verify each transaction's old roots match current state before processing
         for (i, tx) in self.pending_batch.transactions.iter().enumerate() {
@@ -160,19 +169,26 @@ impl ServerVerifier {
     }
     
     /// Verify a single transaction's proof
+    #[instrument(skip(self, tx), fields(tx_type = ?tx.tx_type))]
     fn verify_transaction_proof(&self, tx: &VerifiedTransaction) -> Result<(), FluxeError> {
+        trace!("Verifying {:?} transaction proof", tx.tx_type);
+        let _timer = PerfTimer::new(format!("verify_{:?}_proof", tx.tx_type));
+
         let vk = match tx.tx_type {
             TransactionType::Mint => &self.vk_mint,
             TransactionType::Burn => &self.vk_burn,
             TransactionType::Transfer => &self.vk_transfer,
             TransactionType::ObjectUpdate => &self.vk_object_update,
         };
-        
+
         let verified = Groth16::<ark_bls12_381::Bls12_381>::verify(vk, &tx.public_inputs, &tx.proof)
-            .map_err(|e| FluxeError::InvalidProof(format!("Groth16 verification failed: {}", e)))?;
+            .map_err(|e| {
+                error!("Proof verification failed for {:?}: {}", tx.tx_type, e);
+                FluxeError::Verification(format!("Groth16 verification failed: {}", e))
+            })?;
         
         if !verified {
-            return Err(FluxeError::InvalidProof("Proof verification failed".to_string()));
+            return Err(FluxeError::Verification("Proof verification failed".to_string()));
         }
         
         Ok(())
@@ -199,9 +215,9 @@ impl ServerVerifier {
             TransactionData::Burn { nullifier, exit_receipt, asset_type, amount, .. } => {
                 // 1. Check and insert nullifier
                 if self.state.nft_tree.contains(nullifier) {
-                    return Err(FluxeError::DoubleSpend(*nullifier));
+                    return Err(FluxeError::StateManagement(StateError::DoubleSpend(format!("{:?}", nullifier))));
                 }
-                self.state.nft_tree.insert(*nullifier)?;
+                self.state.nft_tree.insert(*nullifier).map_err(|e| FluxeError::Other(e))?;
                 
                 // 2. Append exit receipt
                 self.state.exit_tree.append(exit_receipt.hash());
@@ -211,7 +227,7 @@ impl ServerVerifier {
                     .entry(*asset_type)
                     .or_insert(Amount::zero());
                 if *supply < *amount {
-                    return Err(FluxeError::InsufficientBalance);
+                    return Err(FluxeError::Other("Insufficient balance for burn".to_string()));
                 }
                 *supply = *supply - *amount;
             }
@@ -219,9 +235,9 @@ impl ServerVerifier {
                 // 1. Insert nullifiers (in order)
                 for &nf in nullifiers {
                     if self.state.nft_tree.contains(&nf) {
-                        return Err(FluxeError::DoubleSpend(nf));
+                        return Err(FluxeError::StateManagement(StateError::DoubleSpend(format!("{:?}", nf))));
                     }
-                    self.state.nft_tree.insert(nf)?;
+                    self.state.nft_tree.insert(nf).map_err(|e| FluxeError::Other(e))?;
                 }
                 
                 // 2. Append output note commitments
@@ -234,7 +250,7 @@ impl ServerVerifier {
                 for op in callback_ops {
                     match op {
                         CallbackOperation::Add(invocation) => {
-                            self.state.cb_tree.insert(invocation.ticket)?;
+                            self.state.cb_tree.insert(invocation.ticket).map_err(|e| FluxeError::Other(e))?;
                         }
                         CallbackOperation::Process(_ticket) => {
                             // Mark as processed
@@ -275,7 +291,7 @@ impl ServerVerifier {
         
         let mut tx_hash_bytes = Vec::new();
         tx_hash.serialize_compressed(&mut tx_hash_bytes)
-            .map_err(|e| FluxeError::SerializationError(format!("Failed to serialize tx hash: {}", e)))?;
+            .map_err(|e| FluxeError::Serialization(e))?;
         proof_data.extend(tx_hash_bytes);
         
         Ok(proof_data)
@@ -309,7 +325,7 @@ impl ServerVerifier {
     }
     
     /// Get membership proof for a nullifier
-    pub fn get_nullifier_membership_proof(&self, nf: &F) -> Option<crate::merkle::MerklePath> {
+    pub fn get_nullifier_membership_proof(&self, _nf: &F) -> Option<crate::merkle::MerklePath> {
         // For sorted tree, we would need to track the index when the nullifier was inserted
         // For now, return None as SortedTree doesn't provide a way to get path by key
         // This would require enhancing SortedTree to maintain a key->index mapping
