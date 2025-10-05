@@ -8,6 +8,7 @@
 - [What is Fluxe?](#what-is-fluxe)
 - [Design Goals](#design-goals)
 - [High-Level Architecture](#high-level-architecture)
+- [Rapidsnark Integration](#rapidsnark-integration) ⚡ **NEW**
 - [Core Protocol Objects](#core-protocol-objects)
 - [Cryptographic Primitives](#cryptographic-primitives)
 - [Circuit Suite](#circuit-suite)
@@ -48,10 +49,51 @@
 ## High-Level Architecture
 ```
 fluxe-circuits/
-├─ fluxe-core/ # Core types, trees, crypto, state manager
-├─ fluxe-circuits/ # ZK circuits + gadgets
-└─ fluxe-api/ # Axum HTTP service exposing endpoints
+├─ fluxe-core/       # Core types, trees, crypto, state manager
+├─ fluxe-circuits/   # ZK circuits + gadgets
+├─ fluxe-api/        # Axum HTTP service exposing endpoints
+└─ fluxe-rapidsnark/ # Rapidsnark integration for fast proving ⚡
 ```
+
+## Rapidsnark Integration
+
+Fluxe now includes **high-performance proof generation** via rapidsnark integration, offering **5-10x faster proving** compared to arkworks-native Groth16.
+
+### Quick Start
+
+```bash
+# Run simple example
+cargo run --example simple_circuit --package fluxe-rapidsnark
+
+# Setup trusted ceremony
+cd fluxe-rapidsnark && ./scripts/setup.sh simple
+
+# Generate proof with rapidsnark (fast!)
+./scripts/prove.sh simple
+
+# Verify proof
+./scripts/verify.sh simple
+```
+
+### Features
+
+- ✅ BLS12-381 to Circom R1CS/WTNS export
+- ✅ Automated trusted setup scripts
+- ✅ Rapidsnark prover integration (5-10x faster)
+- ✅ Dual verification (rapidsnark + snarkjs)
+- ✅ All Fluxe circuits supported (Mint, Transfer, Burn, ObjectUpdate)
+
+### Documentation
+
+See **[RAPIDSNARK_INTEGRATION.md](./RAPIDSNARK_INTEGRATION.md)** for comprehensive guide including:
+- Architecture and design
+- Installation and setup
+- Circuit export and proving
+- Production deployment
+- Performance benchmarks
+- Troubleshooting
+
+Also see `fluxe-rapidsnark/README.md` for API documentation.
 
 Key flows:
 

@@ -1,0 +1,31 @@
+[package]
+name = "fluxe-rapidsnark"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+fluxe-core = { path = "../fluxe-core" }
+fluxe-circuits = { path = "../fluxe-circuits" }
+
+# Arkworks dependencies (BLS12-381)
+ark-bls12-381 = { workspace = true }
+ark-ff = { workspace = true }
+ark-relations = { workspace = true }
+ark-std = { workspace = true }
+ark-r1cs-std = { workspace = true }
+ark-groth16 = { workspace = true }
+ark-serialize = { workspace = true }
+
+# Circom file formats
+r1cs-file = "0.3"
+wtns-file = "0.1"
+
+# Utilities
+anyhow = "1.0"
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }
