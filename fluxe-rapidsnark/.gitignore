@@ -1,0 +1,24 @@
+# Output files
+outputs/
+*.r1cs
+*.wtns
+*.zkey
+*.ptau
+*_vkey.json
+*_proof.json
+*_public.json
+
+# Build artifacts
+target/
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

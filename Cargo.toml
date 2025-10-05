@@ -1,5 +1,5 @@
 [workspace]
-members = ["fluxe-core", "fluxe-circuits", "fluxe-api"]
+members = ["fluxe-core", "fluxe-circuits", "fluxe-api", "fluxe-rapidsnark"]
 resolver = "2"
 
 [workspace.package]
