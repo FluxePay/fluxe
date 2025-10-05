@@ -3,3 +3,13 @@
 .DS_Store
 .vscode
 .idea
+
+# Rapidsnark outputs
+fluxe-rapidsnark/outputs/
+*.r1cs
+*.wtns
+*.zkey
+*.ptau
+*_vkey.json
+*_proof.json
+*_public.json
