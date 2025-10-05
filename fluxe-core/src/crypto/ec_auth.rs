@@ -1,15 +1,15 @@
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ec::{CurveGroup, PrimeGroup};
-use ark_ed_on_bls12_381::EdwardsProjective as Jubjub;
+use ark_ed_on_bn254::EdwardsProjective as BabyJubJub;
 use ark_ff::{BigInteger, PrimeField};
 
 use super::poseidon_hash;
 
-/// Compute EC public key from secret key using Jubjub curve
+/// Compute EC public key from secret key using Baby JubJub curve
 /// Returns (pk_x, pk_y) as field elements in Fr
 pub fn compute_ec_public_key(sk: F) -> (F, F) {
-    // Compute pk = sk * G on Jubjub curve
-    let g = <Jubjub as PrimeGroup>::generator();
+    // Compute pk = sk * G on Baby JubJub curve
+    let g = <BabyJubJub as PrimeGroup>::generator();
     
     // Scalar multiplication
     let sk_bigint = sk.into_bigint();
@@ -17,9 +17,9 @@ pub fn compute_ec_public_key(sk: F) -> (F, F) {
     
     // Get affine coordinates
     let pk_affine = pk.into_affine();
-    
+
     // Convert coordinates from Fq to Fr
-    // This is safe since both fields have same size for BLS12-381
+    // This is safe since both fields have same size for BN254
     let x_bytes = pk_affine.x.into_bigint().to_bytes_le();
     let y_bytes = pk_affine.y.into_bigint().to_bytes_le();
     

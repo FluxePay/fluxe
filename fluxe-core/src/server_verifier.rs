@@ -5,7 +5,7 @@ use crate::{
     state_manager::StateManager,
     types::*,
 };
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_serialize::CanonicalSerialize;
 use ark_snark::SNARK;
@@ -18,10 +18,10 @@ pub struct ServerVerifier {
     state: StateManager,
     
     /// Verifying keys for different circuit types
-    vk_mint: VerifyingKey<ark_bls12_381::Bls12_381>,
-    vk_burn: VerifyingKey<ark_bls12_381::Bls12_381>,
-    vk_transfer: VerifyingKey<ark_bls12_381::Bls12_381>,
-    vk_object_update: VerifyingKey<ark_bls12_381::Bls12_381>,
+    vk_mint: VerifyingKey<ark_bn254::Bn254>,
+    vk_burn: VerifyingKey<ark_bn254::Bn254>,
+    vk_transfer: VerifyingKey<ark_bn254::Bn254>,
+    vk_object_update: VerifyingKey<ark_bn254::Bn254>,
     
     /// Pending transaction batch
     pending_batch: TransactionBatch,
@@ -39,7 +39,7 @@ pub struct TransactionBatch {
 #[derive(Clone, Debug)]
 pub struct VerifiedTransaction {
     pub tx_type: TransactionType,
-    pub proof: Proof<ark_bls12_381::Bls12_381>,
+    pub proof: Proof<ark_bn254::Bn254>,
     pub public_inputs: Vec<F>,
     pub old_roots: StateRoots,
     pub new_roots: StateRoots,
@@ -75,10 +75,10 @@ pub enum TransactionData {
 impl ServerVerifier {
     pub fn new(
         state: StateManager,
-        vk_mint: VerifyingKey<ark_bls12_381::Bls12_381>,
-        vk_burn: VerifyingKey<ark_bls12_381::Bls12_381>,
-        vk_transfer: VerifyingKey<ark_bls12_381::Bls12_381>,
-        vk_object_update: VerifyingKey<ark_bls12_381::Bls12_381>,
+        vk_mint: VerifyingKey<ark_bn254::Bn254>,
+        vk_burn: VerifyingKey<ark_bn254::Bn254>,
+        vk_transfer: VerifyingKey<ark_bn254::Bn254>,
+        vk_object_update: VerifyingKey<ark_bn254::Bn254>,
     ) -> Self {
         Self {
             state,
@@ -181,7 +181,7 @@ impl ServerVerifier {
             TransactionType::ObjectUpdate => &self.vk_object_update,
         };
 
-        let verified = Groth16::<ark_bls12_381::Bls12_381>::verify(vk, &tx.public_inputs, &tx.proof)
+        let verified = Groth16::<ark_bn254::Bn254>::verify(vk, &tx.public_inputs, &tx.proof)
             .map_err(|e| {
                 error!("Proof verification failed for {:?}: {}", tx.tx_type, e);
                 FluxeError::Verification(format!("Groth16 verification failed: {}", e))
@@ -377,7 +377,7 @@ impl TransactionBuilder {
     
     pub fn build(
         self,
-        proof: Proof<ark_bls12_381::Bls12_381>,
+        proof: Proof<ark_bn254::Bn254>,
         public_inputs: Vec<F>,
         transaction_data: TransactionData,
     ) -> VerifiedTransaction {
@@ -401,10 +401,10 @@ mod tests {
 
     // Mock setup for testing
     fn create_mock_verifying_keys() -> (
-        VerifyingKey<ark_bls12_381::Bls12_381>,
-        VerifyingKey<ark_bls12_381::Bls12_381>,
-        VerifyingKey<ark_bls12_381::Bls12_381>,
-        VerifyingKey<ark_bls12_381::Bls12_381>,
+        VerifyingKey<ark_bn254::Bn254>,
+        VerifyingKey<ark_bn254::Bn254>,
+        VerifyingKey<ark_bn254::Bn254>,
+        VerifyingKey<ark_bn254::Bn254>,
     ) {
         // In tests, we'd use actual circuit setups
         // For now, create dummy VKs
@@ -418,7 +418,7 @@ mod tests {
         }
         
         let mut rng = thread_rng();
-        let (pk, vk) = Groth16::<ark_bls12_381::Bls12_381>::circuit_specific_setup(
+        let (pk, vk) = Groth16::<ark_bn254::Bn254>::circuit_specific_setup(
             DummyCircuit, &mut rng
         ).unwrap();
         

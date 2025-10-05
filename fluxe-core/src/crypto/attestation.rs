@@ -1,6 +1,6 @@
 use crate::crypto::{poseidon_hash, SchnorrSecretKey, SchnorrPublicKey, SchnorrSignature};
 use crate::types::*;
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ff::UniformRand;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use std::collections::HashMap;
@@ -151,7 +151,7 @@ impl SignedAttestation {
             provider_id,
             data,
             signature: SchnorrSignature {
-                r_point: ark_bls12_381::G1Projective::rand(&mut rng),
+                r_point: ark_bn254::G1Projective::rand(&mut rng),
                 s: F::rand(&mut rng),
             },
         }
@@ -185,7 +185,7 @@ impl SignedAttestation {
     pub fn commitment(&self) -> F {
         let mut fields = self.message_to_sign();
         // Add signature components
-        let r_affine: ark_bls12_381::G1Affine = self.signature.r_point.into();
+        let r_affine: ark_bn254::G1Affine = self.signature.r_point.into();
         fields.push(crate::crypto::schnorr::fq_to_fr(r_affine.x));
         fields.push(crate::crypto::schnorr::fq_to_fr(r_affine.y));
         fields.push(self.signature.s);

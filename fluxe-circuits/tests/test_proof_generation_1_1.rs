@@ -1,4 +1,4 @@
-use ark_bls12_381::Bls12_381;
+use ark_bn254::Bn254;
 use ark_groth16::{Groth16, PreparedVerifyingKey};
 use ark_snark::SNARK;
 use ark_std::rand::thread_rng;
@@ -19,7 +19,7 @@ fn test_1_1_proof_generation() {
     let setup_circuit = create_transfer_circuit(&mut rng, 1, 1);
     
     println!("Running circuit setup...");
-    let (pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(
+    let (pk, vk) = Groth16::<Bn254>::circuit_specific_setup(
         setup_circuit, &mut rng
     ).expect("Setup should work");
     
@@ -31,7 +31,7 @@ fn test_1_1_proof_generation() {
     let proving_circuit = create_transfer_circuit(&mut rng, 1, 1);
     
     println!("Generating proof...");
-    let proof = Groth16::<Bls12_381>::prove(
+    let proof = Groth16::<Bn254>::prove(
         &pk, proving_circuit, &mut rng
     ).expect("Proof generation should work");
     
@@ -63,10 +63,10 @@ fn test_1_1_proof_generation() {
     }
     
     // Add fee
-    public_inputs.push(ark_bls12_381::Fr::from(10u64)); // Fee is 10
+    public_inputs.push(ark_bn254::Fr::from(10u64)); // Fee is 10
     
     println!("Verifying proof with {} public inputs...", public_inputs.len());
-    let valid = Groth16::<Bls12_381>::verify_with_processed_vk(
+    let valid = Groth16::<Bn254>::verify_with_processed_vk(
         &pvk, &public_inputs, &proof
     ).expect("Verification should complete");
     

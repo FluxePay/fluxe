@@ -1,4 +1,4 @@
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 // Using ark_serialize for cryptographic types
 

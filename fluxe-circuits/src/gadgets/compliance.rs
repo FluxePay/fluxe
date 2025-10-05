@@ -1,7 +1,7 @@
 // This file contains additional compliance-related gadgets
 // The main ZkObjectVar and ComplianceStateVar are in zk_object.rs
 
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::SynthesisError;

@@ -1,4 +1,4 @@
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_crypto_primitives::{
     crh::{
         poseidon::{self},
@@ -13,7 +13,7 @@ use ark_ff::PrimeField;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_relations::r1cs::SynthesisError;
 
-/// Generate Poseidon parameters for BLS12-381
+/// Generate Poseidon parameters for BN254
 pub fn gen_poseidon_params(rate: usize, optimized_for_weights: bool) -> PoseidonConfig<F> {
     let params_set = if !optimized_for_weights {
         [

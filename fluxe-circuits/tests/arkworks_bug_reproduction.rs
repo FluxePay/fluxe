@@ -1,7 +1,7 @@
 // Test to reproduce arkworks 0.5.0 is_cmp bug
 // Run with: cargo test --test arkworks_bug_reproduction
 
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSystem, SynthesisError};

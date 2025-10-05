@@ -128,14 +128,14 @@ pub struct ComplianceConfig {
     /// Sanctions list update interval (hours)
     pub sanctions_update_hours: u64,
 
-    /// Default daily limit
-    pub default_daily_limit: u128,
+    /// Default daily limit (using u64 for TOML compatibility)
+    pub default_daily_limit: u64,
 
-    /// Default monthly limit
-    pub default_monthly_limit: u128,
+    /// Default monthly limit (using u64 for TOML compatibility)
+    pub default_monthly_limit: u64,
 
-    /// Default yearly limit
-    pub default_yearly_limit: u128,
+    /// Default yearly limit (using u64 for TOML compatibility)
+    pub default_yearly_limit: u64,
 
     /// Callback timeout (seconds)
     pub callback_timeout_secs: u64,
@@ -253,9 +253,9 @@ impl Default for ComplianceConfig {
         Self {
             sanctions_screening: true,
             sanctions_update_hours: 24,
-            default_daily_limit: 100_000_000_000_000_000_000u128, // 100 units
-            default_monthly_limit: 1_000_000_000_000_000_000_000u128, // 1000 units
-            default_yearly_limit: 10_000_000_000_000_000_000_000u128, // 10000 units
+            default_daily_limit: 100_000_000_000u64, // 100k units (in smallest denomination with 6 decimals)
+            default_monthly_limit: 1_000_000_000_000u64, // 1M units
+            default_yearly_limit: 10_000_000_000_000u64, // 10M units
             callback_timeout_secs: 86400, // 24 hours
             auto_freeze_risk_threshold: 90,
         }

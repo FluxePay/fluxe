@@ -1,4 +1,4 @@
-use ark_bls12_381::Bls12_381;
+use ark_bn254::Bn254;
 use ark_groth16::Groth16;
 use ark_snark::SNARK;
 use ark_std::rand::thread_rng;
@@ -17,7 +17,7 @@ fn test_transfer_1_1_setup() {
     let transfer_circuit = create_transfer_circuit(&mut rng, 1, 1);
     
     println!("Generated transfer 1-1 circuit, attempting setup...");
-    let result = Groth16::<Bls12_381>::circuit_specific_setup(transfer_circuit, &mut rng);
+    let result = Groth16::<Bn254>::circuit_specific_setup(transfer_circuit, &mut rng);
     
     match result {
         Ok((pk, vk)) => {
@@ -39,7 +39,7 @@ fn test_transfer_2_2_setup() {
     let transfer_circuit = create_transfer_circuit(&mut rng, 2, 2);
     
     println!("Generated transfer 2-2 circuit, attempting setup...");
-    let result = Groth16::<Bls12_381>::circuit_specific_setup(transfer_circuit, &mut rng);
+    let result = Groth16::<Bn254>::circuit_specific_setup(transfer_circuit, &mut rng);
     
     match result {
         Ok((pk, vk)) => {
@@ -61,7 +61,7 @@ fn test_burn_setup() {
     let burn_circuit = create_burn_circuit(&mut rng);
     
     println!("Generated burn circuit, attempting setup...");
-    let result = Groth16::<Bls12_381>::circuit_specific_setup(burn_circuit, &mut rng);
+    let result = Groth16::<Bn254>::circuit_specific_setup(burn_circuit, &mut rng);
     
     match result {
         Ok((pk, vk)) => {

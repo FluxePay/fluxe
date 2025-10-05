@@ -1,5 +1,5 @@
-use ark_bls12_381::Fr as F;
-use ark_ed_on_bls12_381::{Fq as JubjubFq, constraints::FqVar};
+use ark_bn254::Fr as F;
+use ark_ed_on_bn254::{Fq as BabyJubJubFq, constraints::FqVar};
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
@@ -36,8 +36,8 @@ pub struct ObjectUpdateCircuit {
     pub callback_invocation: Option<CallbackInvocation>,
     
     /// Schnorr signature components for callback verification (if invoked)
-    /// (provider_pk_x, provider_pk_y, sig_r_x, sig_r_y) in Jubjub Fq, sig_s in Fr
-    pub callback_signature: Option<(JubjubFq, JubjubFq, JubjubFq, JubjubFq, F)>,
+    /// (provider_pk_x, provider_pk_y, sig_r_x, sig_r_y) in BabyJubJub Fq, sig_s in Fr
+    pub callback_signature: Option<(BabyJubJubFq, BabyJubJubFq, BabyJubJubFq, BabyJubJubFq, F)>,
     
     /// Merkle path for callback in CB_ROOT (if invoked)
     pub cb_path: Option<MerklePath>,

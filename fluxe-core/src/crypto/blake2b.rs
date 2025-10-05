@@ -1,5 +1,5 @@
 use blake2::{Blake2b512, Digest};
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ff::{BigInteger, PrimeField};
 
 /// Blake2b hash for entropy derivation

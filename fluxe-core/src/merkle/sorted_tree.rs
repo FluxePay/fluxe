@@ -1,5 +1,5 @@
 use super::{MerklePath, MerkleTree, RangePath, SortedLeaf, SortedInsertWitness, TreeParams};
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ff::{Zero, PrimeField};
 // use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};

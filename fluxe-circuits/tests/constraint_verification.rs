@@ -1,4 +1,4 @@
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ff::UniformRand;
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
 use ark_std::rand::{SeedableRng, Rng};
@@ -61,11 +61,11 @@ fn test_value_conservation() {
     note2.lineage_hash = F::from(2u64);
     note2.memo_hash = F::from(0u64);
     
-    // Create proper EC authentication for the input notes using real Jubjub curve
+    // Create proper EC authentication for the input notes using real Baby JubJub curve
     let mut owner_sk1 = F::from(1u64);
     let mut owner_sk2 = F::from(2u64);
     
-    // Use real EC scalar multiplication on Jubjub curve
+    // Use real EC scalar multiplication on Baby JubJub curve
     let (mut pk1_x, mut pk1_y) = fluxe_core::crypto::compute_ec_public_key(owner_sk1);
     let owner_addr1 = poseidon_hash(&[pk1_x, pk1_y]);
     

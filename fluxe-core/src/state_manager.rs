@@ -3,7 +3,7 @@ use crate::data_structures::{IngressReceipt, ExitReceipt, CallbackInvocation};
 use crate::errors::StateError;
 use crate::merkle::{IncrementalTree, SortedTree, MerklePath, TreeParams, SortedLeaf};
 use crate::types::{*, StateRoots};
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ff::Zero;
 use std::collections::HashMap;
 

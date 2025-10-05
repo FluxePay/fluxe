@@ -1,7 +1,7 @@
 use crate::crypto::{poseidon_hash, domain_sep_to_field, DOM_OBJ, SchnorrSignature, SchnorrPublicKey};
 use crate::data_structures::ComplianceState;
 use crate::types::*;
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ff::UniformRand;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 // Using ark_serialize for ZK object serialization

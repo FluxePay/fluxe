@@ -1,8 +1,8 @@
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ec::PrimeGroup;
-use ark_ed_on_bls12_381::{
-    constraints::{EdwardsVar as JubjubVar, FqVar},
-    EdwardsProjective as Jubjub,
+use ark_ed_on_bn254::{
+    constraints::{EdwardsVar as BabyJubJubVar, FqVar},
+    EdwardsProjective as BabyJubJub,
 };
 use ark_r1cs_std::{
     alloc::AllocVar,
@@ -63,7 +63,7 @@ impl AuthGadget {
         poseidon_hash_zk(&[pk_x, pk_y])
     }
     
-    /// Real scalar multiplication: pk = sk * G on Jubjub
+    /// Real scalar multiplication: pk = sk * G on Baby JubJub
     /// Returns Fq coordinates to avoid unsafe conversions
     pub fn scalar_mult_generator(
         cs: ConstraintSystemRef<F>,
@@ -73,8 +73,8 @@ impl AuthGadget {
         let bits = scalar.to_bits_le()?;
 
         // Constant generator
-        let g = <Jubjub as PrimeGroup>::generator();
-        let g_var = JubjubVar::new_constant(cs.clone(), g)?;
+        let g = <BabyJubJub as PrimeGroup>::generator();
+        let g_var = BabyJubJubVar::new_constant(cs.clone(), g)?;
 
         // Variable-time scalar mul in-circuit (fixed-base windowed)
         // Use r1cs_std scalar_mul_le which walks bits of the scalar
@@ -109,9 +109,9 @@ impl AuthGadget {
         pk_y: &FpVar<F>,
     ) -> Result<Boolean<F>, SynthesisError> {
         // Baby JubJub curve equation: ax^2 + y^2 = 1 + dx^2y^2
-        // where a = 168700 and d = 168696 for Baby JubJub over BLS12-381
+        // where a = 168700 and d = 168696 for Baby JubJub over BN254
         
-        // Parameters for Baby JubJub (EdwardsProjective on BLS12-381)
+        // Parameters for Baby JubJub (EdwardsProjective on BN254)
         let a = FpVar::constant(F::from(168700u64));
         let d = FpVar::constant(F::from(168696u64));
         let one = FpVar::one();

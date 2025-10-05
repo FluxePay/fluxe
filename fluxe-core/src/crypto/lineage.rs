@@ -1,4 +1,4 @@
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use crate::crypto::poseidon_hash;
 
 /// Bounded horizon lineage accumulator

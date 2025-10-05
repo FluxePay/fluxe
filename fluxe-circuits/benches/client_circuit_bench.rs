@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use ark_bls12_381::{Bls12_381, Fr as F};
+use ark_bn254::{Bn254, Fr as F};
 use ark_groth16::{Groth16, prepare_verifying_key};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem};
 use ark_ff::UniformRand;
@@ -118,18 +118,18 @@ fn benchmark_circuit<C: ConstraintSynthesizer<F> + Clone>(
     
     // Setup
     let setup_start = Instant::now();
-    let (pk, vk) = Groth16::<Bls12_381>::circuit_specific_setup(circuit.clone(), rng).unwrap();
+    let (pk, vk) = Groth16::<Bn254>::circuit_specific_setup(circuit.clone(), rng).unwrap();
     let setup_time = setup_start.elapsed();
     
     // Prove
     let prove_start = Instant::now();
-    let proof = Groth16::<Bls12_381>::prove(&pk, circuit, rng).unwrap();
+    let proof = Groth16::<Bn254>::prove(&pk, circuit, rng).unwrap();
     let prove_time = prove_start.elapsed();
     
     // Verify
     let pvk = prepare_verifying_key(&vk);
     let verify_start = Instant::now();
-    let valid = Groth16::<Bls12_381>::verify_with_processed_vk(&pvk, &public_inputs, &proof).unwrap();
+    let valid = Groth16::<Bn254>::verify_with_processed_vk(&pvk, &public_inputs, &proof).unwrap();
     let verify_time = verify_start.elapsed();
     
     assert!(valid, "Proof verification failed!");
@@ -203,10 +203,10 @@ fn bench_client_circuits(c: &mut Criterion) {
     
     group.bench_function("mint_prove", |b| {
         let (circuit, _) = create_mint_circuit_for_bench(&mut rng, 1);
-        let (pk, _) = Groth16::<Bls12_381>::circuit_specific_setup(circuit.clone(), &mut rng).unwrap();
+        let (pk, _) = Groth16::<Bn254>::circuit_specific_setup(circuit.clone(), &mut rng).unwrap();
         
         b.iter(|| {
-            let proof = Groth16::<Bls12_381>::prove(&pk, circuit.clone(), &mut rng).unwrap();
+            let proof = Groth16::<Bn254>::prove(&pk, circuit.clone(), &mut rng).unwrap();
             black_box(proof);
         });
     });

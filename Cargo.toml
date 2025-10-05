@@ -8,10 +8,10 @@ edition = "2021"
 authors = ["Fluxe Team"]
 
 [workspace.dependencies]
-ark-bls12-381 = "0.5.0"
+ark-bn254 = "0.5.0"
 ark-crypto-primitives = { version = "0.5.0", default-features = true, features = ["crh", "r1cs", "merkle_tree"] }
 ark-ec = "0.5.0"
-ark-ed-on-bls12-381 = { version = "0.5.0", features = ["r1cs"] }
+ark-ed-on-bn254 = { version = "0.5.0", features = ["r1cs"] }
 ark-ff = "0.5.0"
 ark-groth16 = "0.5.0"
 ark-r1cs-std = "0.5.0"

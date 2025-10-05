@@ -3,7 +3,7 @@ use fluxe_core::data_structures::{
     CallbackInvocation, CallbackPackage
 };
 use fluxe_core::types::*;
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ff::UniformRand;
 use rand::thread_rng;
 

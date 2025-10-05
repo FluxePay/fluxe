@@ -1,4 +1,4 @@
-use ark_bls12_381::{Bls12_381, Fr as F};
+use ark_bn254::{Bn254, Fr as F};
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_snark::SNARK;
@@ -41,8 +41,8 @@ impl CircuitType {
 /// Trusted setup parameters for a circuit
 #[derive(Clone)]
 pub struct TrustedSetup {
-    pub proving_key: ProvingKey<Bls12_381>,
-    pub verifying_key: VerifyingKey<Bls12_381>,
+    pub proving_key: ProvingKey<Bn254>,
+    pub verifying_key: VerifyingKey<Bn254>,
 }
 
 impl TrustedSetup {
@@ -192,7 +192,7 @@ impl SetupManager {
             &mut ingress_tree,
         );
         
-        let (proving_key, verifying_key) = Groth16::<Bls12_381>::circuit_specific_setup(dummy_circuit, rng)?;
+        let (proving_key, verifying_key) = Groth16::<Bn254>::circuit_specific_setup(dummy_circuit, rng)?;
         
         Ok(TrustedSetup {
             proving_key,
@@ -300,7 +300,7 @@ impl SetupManager {
             nf_in,
         };
         
-        let (proving_key, verifying_key) = Groth16::<Bls12_381>::circuit_specific_setup(dummy_circuit, rng)?;
+        let (proving_key, verifying_key) = Groth16::<Bn254>::circuit_specific_setup(dummy_circuit, rng)?;
         
         Ok(TrustedSetup {
             proving_key,
@@ -486,7 +486,7 @@ impl SetupManager {
             fee: fee.into(),
         };
         
-        let (proving_key, verifying_key) = Groth16::<Bls12_381>::circuit_specific_setup(dummy_circuit, rng)?;
+        let (proving_key, verifying_key) = Groth16::<Bn254>::circuit_specific_setup(dummy_circuit, rng)?;
         
         Ok(TrustedSetup {
             proving_key,
@@ -670,7 +670,7 @@ impl SetupManager {
             fee: 10u64.into(),
         };
         
-        let (proving_key, verifying_key) = Groth16::<Bls12_381>::circuit_specific_setup(dummy_circuit, rng)?;
+        let (proving_key, verifying_key) = Groth16::<Bn254>::circuit_specific_setup(dummy_circuit, rng)?;
         
         Ok(TrustedSetup {
             proving_key,
@@ -742,7 +742,7 @@ impl SetupManager {
             current_time: 1000,
         };
         
-        let (proving_key, verifying_key) = Groth16::<Bls12_381>::circuit_specific_setup(dummy_circuit, rng)?;
+        let (proving_key, verifying_key) = Groth16::<Bn254>::circuit_specific_setup(dummy_circuit, rng)?;
         
         Ok(TrustedSetup {
             proving_key,

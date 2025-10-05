@@ -7,7 +7,7 @@ mod tests {
         state_manager::StateManager,
         crypto::pedersen::{PedersenParams, PedersenCommitment, PedersenRandomness},
     };
-    use ark_bls12_381::{Bls12_381, Fr as F};
+    use ark_bn254::{Bn254, Fr as F};
     use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
     use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef};
     use ark_std::test_rng;
@@ -23,9 +23,9 @@ mod tests {
         }
     }
 
-    fn setup_test_verifier() -> (ServerVerifier, ProvingKey<Bls12_381>, VerifyingKey<Bls12_381>) {
+    fn setup_test_verifier() -> (ServerVerifier, ProvingKey<Bn254>, VerifyingKey<Bn254>) {
         let mut rng = test_rng();
-        let (pk, vk) = Groth16::<Bls12_381>::setup(DummyCircuit, &mut rng).unwrap();
+        let (pk, vk) = Groth16::<Bn254>::setup(DummyCircuit, &mut rng).unwrap();
         
         let state = StateManager::new();
         let verifier = ServerVerifier::new(
@@ -79,7 +79,7 @@ mod tests {
         let expected_new_roots = expected_state.get_roots();
 
         // Create verified transaction
-        let proof = Groth16::<Bls12_381>::prove(&pk, DummyCircuit, &mut rng).unwrap();
+        let proof = Groth16::<Bn254>::prove(&pk, DummyCircuit, &mut rng).unwrap();
         let tx = VerifiedTransaction {
             tx_type: TransactionType::Mint,
             proof,
@@ -123,7 +123,7 @@ mod tests {
         let old_roots = verifier.state.get_roots();
         
         // Create two transfers with the same nullifier
-        let proof1 = Groth16::<Bls12_381>::prove(&pk, DummyCircuit, &mut rng).unwrap();
+        let proof1 = Groth16::<Bn254>::prove(&pk, DummyCircuit, &mut rng).unwrap();
         let tx1 = VerifiedTransaction {
             tx_type: TransactionType::Transfer,
             proof: proof1,
@@ -136,7 +136,7 @@ mod tests {
             },
         };
 
-        let proof2 = Groth16::<Bls12_381>::prove(&pk, DummyCircuit, &mut rng).unwrap();
+        let proof2 = Groth16::<Bn254>::prove(&pk, DummyCircuit, &mut rng).unwrap();
         let tx2 = VerifiedTransaction {
             tx_type: TransactionType::Transfer,
             proof: proof2,
@@ -218,7 +218,7 @@ mod tests {
         // Create transactions (in mixed order to test reordering)
         let burn_tx = VerifiedTransaction {
             tx_type: TransactionType::Burn,
-            proof: Groth16::<Bls12_381>::prove(&pk, DummyCircuit, &mut rng).unwrap(),
+            proof: Groth16::<Bn254>::prove(&pk, DummyCircuit, &mut rng).unwrap(),
             public_inputs: vec![],
             old_roots: old_roots.clone(),
             new_roots: old_roots.clone(),
@@ -232,7 +232,7 @@ mod tests {
 
         let mint_tx = VerifiedTransaction {
             tx_type: TransactionType::Mint,
-            proof: Groth16::<Bls12_381>::prove(&pk, DummyCircuit, &mut rng).unwrap(),
+            proof: Groth16::<Bn254>::prove(&pk, DummyCircuit, &mut rng).unwrap(),
             public_inputs: vec![],
             old_roots: old_roots.clone(),
             new_roots: old_roots.clone(),
@@ -246,7 +246,7 @@ mod tests {
 
         let transfer_tx = VerifiedTransaction {
             tx_type: TransactionType::Transfer,
-            proof: Groth16::<Bls12_381>::prove(&pk, DummyCircuit, &mut rng).unwrap(),
+            proof: Groth16::<Bn254>::prove(&pk, DummyCircuit, &mut rng).unwrap(),
             public_inputs: vec![],
             old_roots: old_roots.clone(),
             new_roots: old_roots.clone(),

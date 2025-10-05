@@ -585,29 +585,29 @@ async fn get_info(
 }
 
 // Utility functions for parsing and conversion
-fn parse_proof_from_bytes(_bytes: &[u8]) -> Result<ark_groth16::Proof<ark_bls12_381::Bls12_381>, FluxeError> {
+fn parse_proof_from_bytes(_bytes: &[u8]) -> Result<ark_groth16::Proof<ark_bn254::Bn254>, FluxeError> {
     // Placeholder - would deserialize actual Groth16 proof
     Err(FluxeError::Other("Proof parsing not implemented".to_string()))
 }
 
-fn parse_public_inputs(inputs: &[String]) -> Result<Vec<ark_bls12_381::Fr>, FluxeError> {
+fn parse_public_inputs(inputs: &[String]) -> Result<Vec<ark_bn254::Fr>, FluxeError> {
     inputs.iter()
         .map(|s| parse_field_from_hex(s))
         .collect()
 }
 
-fn parse_field_from_hex(hex: &str) -> Result<ark_bls12_381::Fr, FluxeError> {
+fn parse_field_from_hex(hex: &str) -> Result<ark_bn254::Fr, FluxeError> {
     let hex = hex.trim_start_matches("0x");
     let bytes = hex::decode(hex)
         .map_err(|e| FluxeError::Other(format!("Invalid hex: {}", e)))?;
     
     // Convert bytes to field element (simplified)
     use ark_serialize::CanonicalDeserialize;
-    ark_bls12_381::Fr::deserialize_compressed(&*bytes)
+    ark_bn254::Fr::deserialize_compressed(&*bytes)
         .map_err(|e| FluxeError::Other(format!("Invalid field element: {}", e)))
 }
 
-fn field_to_hex(field: &ark_bls12_381::Fr) -> String {
+fn field_to_hex(field: &ark_bn254::Fr) -> String {
     use ark_serialize::CanonicalSerialize;
     let mut bytes = Vec::new();
     field.serialize_compressed(&mut bytes).unwrap();
@@ -624,12 +624,12 @@ fn convert_serializable_callback_ops(_ops: &[SerializableCallbackOp]) -> Result<
     Ok(Vec::new())
 }
 
-fn compute_notes_commitment(notes: &[fluxe_core::data_structures::Note]) -> ark_bls12_381::Fr {
+fn compute_notes_commitment(notes: &[fluxe_core::data_structures::Note]) -> ark_bn254::Fr {
     use fluxe_core::crypto::poseidon_hash;
     
     // Compute hash chain: H(0, cm1, cm2, ...)
     // This must match the circuit's cm_out_list_commit computation
-    let mut commitment = ark_bls12_381::Fr::from(0u64);
+    let mut commitment = ark_bn254::Fr::from(0u64);
     
     for note in notes {
         let cm = note.commitment();
@@ -648,7 +648,7 @@ mod tests {
     #[test]
     fn test_parse_field_from_hex() {
         // Test valid hex with 0x prefix
-        let field = ark_bls12_381::Fr::from(42u64);
+        let field = ark_bn254::Fr::from(42u64);
         let hex = field_to_hex(&field);
         let parsed = parse_field_from_hex(&hex).unwrap();
         assert_eq!(field, parsed);
@@ -657,12 +657,12 @@ mod tests {
     #[test]
     fn test_parse_public_inputs() {
         let inputs = vec![
-            field_to_hex(&ark_bls12_381::Fr::from(1u64)),
-            field_to_hex(&ark_bls12_381::Fr::from(2u64)),
+            field_to_hex(&ark_bn254::Fr::from(1u64)),
+            field_to_hex(&ark_bn254::Fr::from(2u64)),
         ];
         let result = parse_public_inputs(&inputs).unwrap();
         assert_eq!(result.len(), 2);
-        assert_eq!(result[0], ark_bls12_381::Fr::from(1u64));
-        assert_eq!(result[1], ark_bls12_381::Fr::from(2u64));
+        assert_eq!(result[0], ark_bn254::Fr::from(1u64));
+        assert_eq!(result[1], ark_bn254::Fr::from(2u64));
     }
 }

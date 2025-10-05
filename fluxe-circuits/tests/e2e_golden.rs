@@ -2,7 +2,7 @@
 /// These tests verify the complete flow: Mint → Transfer → Burn → ObjectUpdate
 /// with actual proof generation and verification
 
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_groth16::Groth16;
 use ark_snark::SNARK;
 use ark_std::rand::SeedableRng;
@@ -154,14 +154,14 @@ fn test_golden_scenario_mint_transfer_burn() {
     );
     
     // Generate and verify mint proof
-    let mint_proof = Groth16::<ark_bls12_381::Bls12_381>::prove(
+    let mint_proof = Groth16::<ark_bn254::Bn254>::prove(
         &ctx.mint_keys.proving_key,
         mint_circuit.clone(),
         &mut ctx.rng,
     ).expect("Mint proof generation failed");
     
     let mint_public_inputs = mint_circuit.public_inputs();
-    let mint_verified = Groth16::<ark_bls12_381::Bls12_381>::verify(
+    let mint_verified = Groth16::<ark_bn254::Bn254>::verify(
         &ctx.mint_keys.verifying_key,
         &mint_public_inputs,
         &mint_proof,
@@ -288,7 +288,7 @@ fn test_golden_scenario_mint_transfer_burn() {
         transfer_circuit.notes_out.len());
     
     // Generate and verify transfer proof
-    let transfer_proof = Groth16::<ark_bls12_381::Bls12_381>::prove(
+    let transfer_proof = Groth16::<ark_bn254::Bn254>::prove(
         &ctx.transfer_keys.proving_key,
         transfer_circuit.clone(),
         &mut ctx.rng,
@@ -298,7 +298,7 @@ fn test_golden_scenario_mint_transfer_burn() {
     println!("  Public inputs count: {}", transfer_public_inputs.len());
     
     // Try to verify the proof
-    match Groth16::<ark_bls12_381::Bls12_381>::verify(
+    match Groth16::<ark_bn254::Bn254>::verify(
         &ctx.transfer_keys.verifying_key,
         &transfer_public_inputs,
         &transfer_proof,
@@ -378,14 +378,14 @@ fn test_golden_scenario_mint_transfer_burn() {
     };
     
     // Generate and verify burn proof
-    let burn_proof = Groth16::<ark_bls12_381::Bls12_381>::prove(
+    let burn_proof = Groth16::<ark_bn254::Bn254>::prove(
         &ctx.burn_keys.proving_key,
         burn_circuit.clone(),
         &mut ctx.rng,
     ).expect("Burn proof generation failed");
     
     let burn_public_inputs = burn_circuit.public_inputs();
-    let burn_verified = Groth16::<ark_bls12_381::Bls12_381>::verify(
+    let burn_verified = Groth16::<ark_bn254::Bn254>::verify(
         &ctx.burn_keys.verifying_key,
         &burn_public_inputs,
         &burn_proof,
@@ -477,7 +477,7 @@ fn test_golden_scenario_with_object_update() {
     
     // Generate and verify object update proof
     println!("  Generating object update proof...");
-    let object_update_proof = Groth16::<ark_bls12_381::Bls12_381>::prove(
+    let object_update_proof = Groth16::<ark_bn254::Bn254>::prove(
         &ctx.object_update_keys.proving_key,
         object_update_circuit.clone(),
         &mut ctx.rng,
@@ -486,7 +486,7 @@ fn test_golden_scenario_with_object_update() {
     let object_update_public_inputs = object_update_circuit.public_inputs();
     println!("  Object update public inputs count: {}", object_update_public_inputs.len());
     
-    match Groth16::<ark_bls12_381::Bls12_381>::verify(
+    match Groth16::<ark_bn254::Bn254>::verify(
         &ctx.object_update_keys.verifying_key,
         &object_update_public_inputs,
         &object_update_proof,

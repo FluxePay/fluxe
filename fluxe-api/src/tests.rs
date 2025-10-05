@@ -1,5 +1,5 @@
 use crate::api::*;
-use ark_bls12_381::Fr;
+use ark_bn254::Fr;
 use ark_ff::Field;
 use ark_serialize::CanonicalSerialize;
 use ark_groth16::Proof;
@@ -130,7 +130,7 @@ mod api_tests {
     fn test_proof_parsing() {
         use ark_groth16::{Proof, ProvingKey, VerifyingKey};
         use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
-        use ark_bls12_381::Bls12_381;
+        use ark_bn254::Bn254;
 
         // Create a dummy circuit for testing
         struct DummyCircuit;
@@ -145,12 +145,12 @@ mod api_tests {
 
         // Generate a proof
         let mut rng = ark_std::test_rng();
-        let (pk, _vk) = ark_groth16::Groth16::<Bls12_381>::setup(
+        let (pk, _vk) = ark_groth16::Groth16::<Bn254>::setup(
             DummyCircuit,
             &mut rng
         ).unwrap();
         
-        let proof = ark_groth16::Groth16::<Bls12_381>::prove(
+        let proof = ark_groth16::Groth16::<Bn254>::prove(
             &pk,
             DummyCircuit,
             &mut rng

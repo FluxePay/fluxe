@@ -1,4 +1,4 @@
-use ark_bls12_381::{Bls12_381, Fr as F};
+use ark_bn254::{Bn254, Fr as F};
 use ark_groth16::{Groth16, PreparedVerifyingKey, Proof, ProvingKey, VerifyingKey};
 use ark_groth16::r1cs_to_qap::LibsnarkReduction;
 use ark_relations::r1cs::ConstraintSynthesizer;
@@ -19,15 +19,15 @@ pub trait FluxeCircuit: ConstraintSynthesizer<F> + Clone {
 
 /// Circuit setup parameters
 pub struct CircuitSetup<C: FluxeCircuit> {
-    pub proving_key: ProvingKey<Bls12_381>,
-    pub verifying_key: VerifyingKey<Bls12_381>,
+    pub proving_key: ProvingKey<Bn254>,
+    pub verifying_key: VerifyingKey<Bn254>,
     _phantom: PhantomData<C>,
 }
 
 impl<C: FluxeCircuit> CircuitSetup<C> {
     /// Generate setup parameters for a circuit
     pub fn setup<R: RngCore + CryptoRng>(circuit: C, rng: &mut R) -> Result<Self, FluxeError> {
-        let (pk, vk) = Groth16::<Bls12_381, LibsnarkReduction>::circuit_specific_setup(circuit, rng)
+        let (pk, vk) = Groth16::<Bn254, LibsnarkReduction>::circuit_specific_setup(circuit, rng)
             .map_err(|e| FluxeError::Other(format!("Setup failed: {}", e)))?;
         
         Ok(Self {
@@ -38,18 +38,18 @@ impl<C: FluxeCircuit> CircuitSetup<C> {
     }
     
     /// Generate proof for a circuit
-    pub fn prove<R: RngCore + CryptoRng>(&self, circuit: C, rng: &mut R) -> Result<Proof<Bls12_381>, FluxeError> {
+    pub fn prove<R: RngCore + CryptoRng>(&self, circuit: C, rng: &mut R) -> Result<Proof<Bn254>, FluxeError> {
         circuit.verify_public_inputs()?;
         
-        Groth16::<Bls12_381, LibsnarkReduction>::prove(&self.proving_key, circuit, rng)
+        Groth16::<Bn254, LibsnarkReduction>::prove(&self.proving_key, circuit, rng)
             .map_err(|e| FluxeError::Verification(format!("Proof generation failed: {}", e)))
     }
     
     /// Verify a proof
-    pub fn verify(&self, proof: &Proof<Bls12_381>, public_inputs: &[F]) -> Result<bool, FluxeError> {
+    pub fn verify(&self, proof: &Proof<Bn254>, public_inputs: &[F]) -> Result<bool, FluxeError> {
         let pvk = PreparedVerifyingKey::from(self.verifying_key.clone());
         
-        Groth16::<Bls12_381, LibsnarkReduction>::verify_with_processed_vk(&pvk, public_inputs, proof)
+        Groth16::<Bn254, LibsnarkReduction>::verify_with_processed_vk(&pvk, public_inputs, proof)
             .map_err(|e| FluxeError::Verification(format!("Verification failed: {}", e)))
     }
 }
@@ -87,7 +87,7 @@ pub struct TransactionProof {
     pub tx_type: TransactionType,
     
     /// Groth16 proof
-    pub proof: Proof<Bls12_381>,
+    pub proof: Proof<Bn254>,
     
     /// Public inputs
     pub public_inputs: Vec<F>,
@@ -99,7 +99,7 @@ pub struct TransactionProof {
 impl TransactionProof {
     pub fn new(
         tx_type: TransactionType,
-        proof: Proof<Bls12_381>,
+        proof: Proof<Bn254>,
         public_inputs: Vec<F>,
         new_roots: StateRoots,
     ) -> Self {
@@ -112,10 +112,10 @@ impl TransactionProof {
     }
     
     /// Verify this proof
-    pub fn verify(&self, vk: &VerifyingKey<Bls12_381>) -> Result<bool, FluxeError> {
+    pub fn verify(&self, vk: &VerifyingKey<Bn254>) -> Result<bool, FluxeError> {
         let pvk = PreparedVerifyingKey::from(vk.clone());
         
-        Groth16::<Bls12_381, LibsnarkReduction>::verify_with_processed_vk(&pvk, &self.public_inputs, &self.proof)
+        Groth16::<Bn254, LibsnarkReduction>::verify_with_processed_vk(&pvk, &self.public_inputs, &self.proof)
             .map_err(|e| FluxeError::Verification(format!("Verification failed: {}", e)))
     }
 }
@@ -153,7 +153,7 @@ impl TransactionBatch {
     }
     
     /// Verify all proofs in the batch
-    pub fn verify_all(&self, verifying_keys: &[VerifyingKey<Bls12_381>]) -> Result<bool, FluxeError> {
+    pub fn verify_all(&self, verifying_keys: &[VerifyingKey<Bn254>]) -> Result<bool, FluxeError> {
         if self.proofs.len() != verifying_keys.len() {
             return Err(FluxeError::Other("Mismatched number of proofs and keys".to_string()));
         }

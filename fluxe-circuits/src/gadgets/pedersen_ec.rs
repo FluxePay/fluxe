@@ -1,12 +1,12 @@
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ec::{AffineRepr, CurveGroup, PrimeGroup};
-use ark_ed_on_bls12_381::{
-    EdwardsProjective as Jubjub,
-    Fq as JubjubFq,
+use ark_ed_on_bn254::{
+    EdwardsProjective as BabyJubJub,
+    Fq as BabyJubJubFq,
 };
 use ark_r1cs_std::groups::curves::twisted_edwards::AffineVar;
 
-type JubjubVar = AffineVar<ark_ed_on_bls12_381::EdwardsConfig, FpVar<JubjubFq>>;
+type BabyJubJubVar = AffineVar<ark_ed_on_bn254::EdwardsConfig, FpVar<BabyJubJubFq>>;
 use ark_ff::{BigInteger, Field, PrimeField, UniformRand};
 use ark_r1cs_std::{
     alloc::AllocVar,
@@ -19,21 +19,21 @@ use ark_r1cs_std::{
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
-/// Pedersen commitment parameters using Jubjub curve
+/// Pedersen commitment parameters using Baby JubJub curve
 #[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct PedersenParamsEC {
     /// Generator for value (G)
-    pub g: Jubjub,
+    pub g: BabyJubJub,
     /// Generator for randomness (H)
-    pub h: Jubjub,
+    pub h: BabyJubJub,
 }
 
 impl PedersenParamsEC {
     /// Create new parameters with random generators
     pub fn new<R: rand::Rng>(rng: &mut R) -> Self {
         // Generate two random points with no known discrete log relationship
-        let g = Jubjub::rand(rng);
-        let h = Jubjub::rand(rng);
+        let g = BabyJubJub::rand(rng);
+        let h = BabyJubJub::rand(rng);
         
         // Ensure they're different
         assert_ne!(g, h);
@@ -52,24 +52,24 @@ impl PedersenParamsEC {
         let mut rng = rand::rngs::StdRng::from_seed(seed);
         
         // Generate G from the standard generator
-        let g = <Jubjub as PrimeGroup>::generator();
+        let g = <BabyJubJub as PrimeGroup>::generator();
         
         // Generate H by hashing a nothing-up-my-sleeve string
         // In production, this should come from a trusted setup ceremony
         let h_scalar = F::from_be_bytes_mod_order(b"FLUXE_PEDERSEN_H_GENERATOR_2024");
         // Use scalar multiplication via the Group trait
-        let g_gen = <Jubjub as PrimeGroup>::generator();
+        let g_gen = <BabyJubJub as PrimeGroup>::generator();
         let h = g_gen.mul_bigint(h_scalar.into_bigint());
         
         Self { g, h }
     }
 }
 
-/// Pedersen commitment in Jubjub curve
+/// Pedersen commitment in Baby JubJub curve
 #[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct PedersenCommitmentEC {
     /// The commitment point C = g^v * h^r
-    pub commitment: Jubjub,
+    pub commitment: BabyJubJub,
 }
 
 impl PedersenCommitmentEC {
@@ -106,9 +106,9 @@ impl PedersenCommitmentEC {
 #[derive(Clone)]
 pub struct PedersenParamsVar {
     /// Generator for value (G)
-    pub g: JubjubVar,
+    pub g: BabyJubJubVar,
     /// Generator for randomness (H)
-    pub h: JubjubVar,
+    pub h: BabyJubJubVar,
 }
 
 impl PedersenParamsVar {
@@ -118,8 +118,8 @@ impl PedersenParamsVar {
         params: &PedersenParamsEC,
     ) -> Result<Self, SynthesisError> {
         Ok(Self {
-            g: JubjubVar::new_constant(cs.clone(), params.g.into_affine())?,
-            h: JubjubVar::new_constant(cs, params.h.into_affine())?,
+            g: BabyJubJubVar::new_constant(cs.clone(), params.g.into_affine())?,
+            h: BabyJubJubVar::new_constant(cs, params.h.into_affine())?,
         })
     }
     
@@ -130,8 +130,8 @@ impl PedersenParamsVar {
     ) -> Result<Self, SynthesisError> {
         let params = params()?;
         Ok(Self {
-            g: JubjubVar::new_witness(cs.clone(), || Ok(params.g.into_affine()))?,
-            h: JubjubVar::new_witness(cs, || Ok(params.h.into_affine()))?,
+            g: BabyJubJubVar::new_witness(cs.clone(), || Ok(params.g.into_affine()))?,
+            h: BabyJubJubVar::new_witness(cs, || Ok(params.h.into_affine()))?,
         })
     }
 }
@@ -140,7 +140,7 @@ impl PedersenParamsVar {
 #[derive(Clone)]
 pub struct PedersenCommitmentVar {
     /// The commitment point C = g^v * h^r
-    pub commitment: JubjubVar,
+    pub commitment: BabyJubJubVar,
 }
 
 impl PedersenCommitmentVar {
@@ -151,7 +151,7 @@ impl PedersenCommitmentVar {
     ) -> Result<Self, SynthesisError> {
         let comm = commitment()?;
         Ok(Self {
-            commitment: JubjubVar::new_witness(cs, || Ok(comm.commitment.into_affine()))?,
+            commitment: BabyJubJubVar::new_witness(cs, || Ok(comm.commitment.into_affine()))?,
         })
     }
     
@@ -162,7 +162,7 @@ impl PedersenCommitmentVar {
     ) -> Result<Self, SynthesisError> {
         let comm = commitment()?;
         Ok(Self {
-            commitment: JubjubVar::new_input(cs, || Ok(comm.commitment.into_affine()))?,
+            commitment: BabyJubJubVar::new_input(cs, || Ok(comm.commitment.into_affine()))?,
         })
     }
     
@@ -221,8 +221,8 @@ impl PedersenCommitmentVar {
         let x = self.commitment.x.clone();
         let y = self.commitment.y.clone();
         
-        // Convert from JubjubFq to F (BLS12-381 scalar field)
-        // This is safe because JubjubFq fits in F
+        // Convert from BabyJubJubFq to F (BN254 scalar field)
+        // This is safe because BabyJubJubFq fits in F
         Ok(vec![x, y])
     }
 }

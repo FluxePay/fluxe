@@ -1,7 +1,7 @@
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 use ark_serialize::{SerializationError, Read, Write};
 use std::fmt;
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 
 /// Wrapper for u128 amounts with ark_serialize support
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]

@@ -1,7 +1,7 @@
 /// End-to-end constraint satisfaction tests for the Fluxe protocol
 /// These tests verify the complete flow without expensive proof generation
 
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
 use std::collections::HashMap;
 

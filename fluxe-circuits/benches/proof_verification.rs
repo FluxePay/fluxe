@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use ark_bls12_381::{Bls12_381, Fr as F};
+use ark_bn254::{Bn254, Fr as F};
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_snark::SNARK;
 use ark_std::rand::SeedableRng;
@@ -14,20 +14,20 @@ use fluxe_circuits::circuits::FluxeCircuit;
 
 /// Pre-generated proofs and keys for verification benchmarks
 struct VerificationSetup {
-    mint_vk: VerifyingKey<Bls12_381>,
-    mint_proof: Proof<Bls12_381>,
+    mint_vk: VerifyingKey<Bn254>,
+    mint_proof: Proof<Bn254>,
     mint_public_inputs: Vec<F>,
     
-    burn_vk: VerifyingKey<Bls12_381>,
-    burn_proof: Proof<Bls12_381>,
+    burn_vk: VerifyingKey<Bn254>,
+    burn_proof: Proof<Bn254>,
     burn_public_inputs: Vec<F>,
     
-    transfer_vk: VerifyingKey<Bls12_381>,
-    transfer_proof: Proof<Bls12_381>,
+    transfer_vk: VerifyingKey<Bn254>,
+    transfer_proof: Proof<Bn254>,
     transfer_public_inputs: Vec<F>,
     
-    object_update_vk: VerifyingKey<Bls12_381>,
-    object_update_proof: Proof<Bls12_381>,
+    object_update_vk: VerifyingKey<Bn254>,
+    object_update_proof: Proof<Bn254>,
     object_update_public_inputs: Vec<F>,
 }
 
@@ -39,40 +39,40 @@ impl VerificationSetup {
         // Generate mint proof
         let mint_circuit = create_mint_circuit(&mut rng);
         let mint_public_inputs = mint_circuit.public_inputs();
-        let (mint_pk, mint_vk) = Groth16::<Bls12_381>::circuit_specific_setup(
+        let (mint_pk, mint_vk) = Groth16::<Bn254>::circuit_specific_setup(
             mint_circuit.clone(), &mut rng
         ).expect("Mint setup failed");
-        let mint_proof = Groth16::<Bls12_381>::prove(
+        let mint_proof = Groth16::<Bn254>::prove(
             &mint_pk, mint_circuit, &mut rng
         ).expect("Mint proof failed");
         
         // Generate burn proof
         let burn_circuit = create_burn_circuit(&mut rng);
         let burn_public_inputs = burn_circuit.public_inputs();
-        let (burn_pk, burn_vk) = Groth16::<Bls12_381>::circuit_specific_setup(
+        let (burn_pk, burn_vk) = Groth16::<Bn254>::circuit_specific_setup(
             burn_circuit.clone(), &mut rng
         ).expect("Burn setup failed");
-        let burn_proof = Groth16::<Bls12_381>::prove(
+        let burn_proof = Groth16::<Bn254>::prove(
             &burn_pk, burn_circuit, &mut rng
         ).expect("Burn proof failed");
         
         // Generate transfer proof
         let transfer_circuit = create_transfer_circuit(&mut rng, 2, 2);
         let transfer_public_inputs = transfer_circuit.public_inputs();
-        let (transfer_pk, transfer_vk) = Groth16::<Bls12_381>::circuit_specific_setup(
+        let (transfer_pk, transfer_vk) = Groth16::<Bn254>::circuit_specific_setup(
             transfer_circuit.clone(), &mut rng
         ).expect("Transfer setup failed");
-        let transfer_proof = Groth16::<Bls12_381>::prove(
+        let transfer_proof = Groth16::<Bn254>::prove(
             &transfer_pk, transfer_circuit, &mut rng
         ).expect("Transfer proof failed");
         
         // Generate object update proof
         let object_update_circuit = create_object_update_circuit(&mut rng);
         let object_update_public_inputs = object_update_circuit.public_inputs();
-        let (object_update_pk, object_update_vk) = Groth16::<Bls12_381>::circuit_specific_setup(
+        let (object_update_pk, object_update_vk) = Groth16::<Bn254>::circuit_specific_setup(
             object_update_circuit.clone(), &mut rng
         ).expect("ObjectUpdate setup failed");
-        let object_update_proof = Groth16::<Bls12_381>::prove(
+        let object_update_proof = Groth16::<Bn254>::prove(
             &object_update_pk, object_update_circuit, &mut rng
         ).expect("ObjectUpdate proof failed");
         
@@ -101,7 +101,7 @@ fn bench_mint_verification(c: &mut Criterion) {
     
     c.bench_function("mint_proof_verification", |b| {
         b.iter(|| {
-            let result = Groth16::<Bls12_381>::verify(
+            let result = Groth16::<Bn254>::verify(
                 &setup.mint_vk,
                 &setup.mint_public_inputs,
                 &setup.mint_proof,
@@ -116,7 +116,7 @@ fn bench_burn_verification(c: &mut Criterion) {
     
     c.bench_function("burn_proof_verification", |b| {
         b.iter(|| {
-            let result = Groth16::<Bls12_381>::verify(
+            let result = Groth16::<Bn254>::verify(
                 &setup.burn_vk,
                 &setup.burn_public_inputs,
                 &setup.burn_proof,
@@ -131,7 +131,7 @@ fn bench_transfer_verification(c: &mut Criterion) {
     
     c.bench_function("transfer_proof_verification", |b| {
         b.iter(|| {
-            let result = Groth16::<Bls12_381>::verify(
+            let result = Groth16::<Bn254>::verify(
                 &setup.transfer_vk,
                 &setup.transfer_public_inputs,
                 &setup.transfer_proof,
@@ -146,7 +146,7 @@ fn bench_object_update_verification(c: &mut Criterion) {
     
     c.bench_function("object_update_proof_verification", |b| {
         b.iter(|| {
-            let result = Groth16::<Bls12_381>::verify(
+            let result = Groth16::<Bn254>::verify(
                 &setup.object_update_vk,
                 &setup.object_update_public_inputs,
                 &setup.object_update_proof,
@@ -170,7 +170,7 @@ fn bench_batch_verification(c: &mut Criterion) {
                 b.iter(|| {
                     let mut results = Vec::new();
                     for _ in 0..size {
-                        let result = Groth16::<Bls12_381>::verify(
+                        let result = Groth16::<Bn254>::verify(
                             &setup.transfer_vk,
                             &setup.transfer_public_inputs,
                             &setup.transfer_proof,
@@ -199,10 +199,10 @@ fn bench_parallel_verification(c: &mut Criterion) {
     for _ in 0..10 {
         let circuit = create_transfer_circuit(&mut rng, 2, 2);
         let inputs = circuit.public_inputs();
-        let (pk, _) = Groth16::<Bls12_381>::circuit_specific_setup(
+        let (pk, _) = Groth16::<Bn254>::circuit_specific_setup(
             circuit.clone(), &mut rng
         ).expect("Setup failed");
-        let proof = Groth16::<Bls12_381>::prove(
+        let proof = Groth16::<Bn254>::prove(
             &pk, circuit, &mut rng
         ).expect("Proof failed");
         
@@ -220,7 +220,7 @@ fn bench_parallel_verification(c: &mut Criterion) {
                     .par_iter()
                     .zip(public_inputs.par_iter())
                     .map(|(proof, inputs)| {
-                        Groth16::<Bls12_381>::verify(
+                        Groth16::<Bn254>::verify(
                             &setup.transfer_vk,
                             inputs,
                             proof,
@@ -238,7 +238,7 @@ fn bench_parallel_verification(c: &mut Criterion) {
                 .iter()
                 .zip(public_inputs.iter())
                 .map(|(proof, inputs)| {
-                    Groth16::<Bls12_381>::verify(
+                    Groth16::<Bn254>::verify(
                         &setup.transfer_vk,
                         inputs,
                         proof,

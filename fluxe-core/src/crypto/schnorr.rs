@@ -1,4 +1,4 @@
-use ark_bls12_381::{Fr as F, Fq, G1Projective as G1, G1Affine};
+use ark_bn254::{Fr as F, Fq, G1Projective as G1, G1Affine};
 use ark_ec::{CurveGroup, PrimeGroup};
 use ark_ff::UniformRand;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -14,7 +14,7 @@ pub fn fq_to_fr(fq: Fq) -> F {
     crate::utils::bytes_to_field(&bytes)
 }
 
-/// Schnorr signature over BLS12-381 G1
+/// Schnorr signature over BN254 G1
 #[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct SchnorrSignature {
     /// Commitment R = r * G

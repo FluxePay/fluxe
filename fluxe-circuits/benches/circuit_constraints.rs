@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem};
 use ark_ff::{UniformRand, PrimeField};
 use ark_std::rand::{RngCore, SeedableRng};

@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use ark_bls12_381::Bls12_381;
+use ark_bn254::Bn254;
 use ark_groth16::{Groth16, ProvingKey};
 use ark_snark::SNARK;
 use ark_std::rand::SeedableRng;
@@ -12,10 +12,10 @@ use common::{create_mint_circuit, create_burn_circuit, create_transfer_circuit, 
 
 /// Setup proving keys for benchmarking
 struct BenchmarkSetup {
-    mint_pk: ProvingKey<Bls12_381>,
-    burn_pk: ProvingKey<Bls12_381>,
-    transfer_pk: ProvingKey<Bls12_381>,
-    object_update_pk: ProvingKey<Bls12_381>,
+    mint_pk: ProvingKey<Bn254>,
+    burn_pk: ProvingKey<Bn254>,
+    transfer_pk: ProvingKey<Bn254>,
+    object_update_pk: ProvingKey<Bn254>,
 }
 
 impl BenchmarkSetup {
@@ -25,25 +25,25 @@ impl BenchmarkSetup {
         
         // Setup for MintCircuit
         let mint_circuit = create_mint_circuit(&mut rng);
-        let (mint_pk, _) = Groth16::<Bls12_381>::circuit_specific_setup(
+        let (mint_pk, _) = Groth16::<Bn254>::circuit_specific_setup(
             mint_circuit, &mut rng
         ).expect("Mint setup failed");
         
         // Setup for BurnCircuit
         let burn_circuit = create_burn_circuit(&mut rng);
-        let (burn_pk, _) = Groth16::<Bls12_381>::circuit_specific_setup(
+        let (burn_pk, _) = Groth16::<Bn254>::circuit_specific_setup(
             burn_circuit, &mut rng
         ).expect("Burn setup failed");
         
         // Setup for TransferCircuit (1-in, 1-out for now due to multi-input bug)
         let transfer_circuit = create_transfer_circuit(&mut rng, 1, 1);
-        let (transfer_pk, _) = Groth16::<Bls12_381>::circuit_specific_setup(
+        let (transfer_pk, _) = Groth16::<Bn254>::circuit_specific_setup(
             transfer_circuit, &mut rng
         ).expect("Transfer setup failed");
         
         // Setup for ObjectUpdateCircuit
         let object_update_circuit = create_object_update_circuit(&mut rng);
-        let (object_update_pk, _) = Groth16::<Bls12_381>::circuit_specific_setup(
+        let (object_update_pk, _) = Groth16::<Bn254>::circuit_specific_setup(
             object_update_circuit, &mut rng
         ).expect("ObjectUpdate setup failed");
         
@@ -66,7 +66,7 @@ fn bench_mint_proof_generation(c: &mut Criterion) {
     c.bench_function("mint_proof_generation", |b| {
         b.iter(|| {
             let circuit = create_mint_circuit(&mut rng);
-            let proof = Groth16::<Bls12_381>::prove(
+            let proof = Groth16::<Bn254>::prove(
                 &setup.mint_pk,
                 circuit,
                 &mut rng
@@ -83,7 +83,7 @@ fn bench_burn_proof_generation(c: &mut Criterion) {
     c.bench_function("burn_proof_generation", |b| {
         b.iter(|| {
             let circuit = create_burn_circuit(&mut rng);
-            let proof = Groth16::<Bls12_381>::prove(
+            let proof = Groth16::<Bn254>::prove(
                 &setup.burn_pk,
                 circuit,
                 &mut rng
@@ -104,7 +104,7 @@ fn bench_transfer_proof_generation(c: &mut Criterion) {
     group.bench_function("2in_2out", |b| {
         b.iter(|| {
             let circuit = create_transfer_circuit(&mut rng, 2, 2);
-            let proof = Groth16::<Bls12_381>::prove(
+            let proof = Groth16::<Bn254>::prove(
                 &setup.transfer_pk,
                 circuit,
                 &mut rng
@@ -122,7 +122,7 @@ fn bench_object_update_proof_generation(c: &mut Criterion) {
     c.bench_function("object_update_proof_generation", |b| {
         b.iter(|| {
             let circuit = create_object_update_circuit(&mut rng);
-            let proof = Groth16::<Bls12_381>::prove(
+            let proof = Groth16::<Bn254>::prove(
                 &setup.object_update_pk,
                 circuit,
                 &mut rng
@@ -150,7 +150,7 @@ fn bench_batch_proof_generation(c: &mut Criterion) {
                     for _ in 0..size {
                         // Use 2-in 2-out to match the setup
                         let circuit = create_transfer_circuit(&mut rng, 2, 2);
-                        let proof = Groth16::<Bls12_381>::prove(
+                        let proof = Groth16::<Bn254>::prove(
                             &setup.transfer_pk,
                             circuit,
                             &mut rng

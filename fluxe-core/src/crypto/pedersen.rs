@@ -1,4 +1,4 @@
-use ark_bls12_381::{Fr as F, G1Affine, G1Projective};
+use ark_bn254::{Fr as F, G1Affine, G1Projective};
 use ark_ec::{AffineRepr, CurveGroup, PrimeGroup};
 use ark_ff::UniformRand;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -44,7 +44,7 @@ impl PedersenParams {
             // Use from_random_bytes which returns Option
             if let Some(x) = F::from_random_bytes(&hash[..31]) {
                 // Try to find a point with this x-coordinate
-                // For BLS12-381, we use a simpler approach:
+                // For BN254, we use a simpler approach:
                 // multiply generator by the scalar derived from hash
                 // This is deterministic and ensures point is in correct subgroup
                 let scalar = x;

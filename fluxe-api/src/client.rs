@@ -2,7 +2,7 @@
 ///
 /// Provides easy-to-use client methods for interacting with the Fluxe API server
 
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_groth16::{Groth16, Proof, ProvingKey};
 use ark_serialize::CanonicalSerialize;
 use ark_snark::SNARK;
@@ -53,7 +53,7 @@ impl FluxeClient {
         asset_type: AssetType,
         amount: u64,
         recipient_addr: F,
-        proving_key: &ProvingKey<ark_bls12_381::Bls12_381>,
+        proving_key: &ProvingKey<ark_bn254::Bn254>,
     ) -> Result<String, Box<dyn Error>> {
         // Create mint note
         let params = PedersenParams::setup_value_commitment();
@@ -100,7 +100,7 @@ impl FluxeClient {
 
         // Generate proof
         let mut rng = rand::thread_rng();
-        let proof = Groth16::<ark_bls12_381::Bls12_381>::prove(proving_key, circuit.clone(), &mut rng)?;
+        let proof = Groth16::<ark_bn254::Bn254>::prove(proving_key, circuit.clone(), &mut rng)?;
         // Get public inputs from circuit (would implement trait)
         let public_inputs = vec![];  // TODO: implement
 
@@ -137,7 +137,7 @@ impl FluxeClient {
         owner_sk: F,
         nk: F,
         cm_path: MerklePath,
-        proving_key: &ProvingKey<ark_bls12_381::Bls12_381>,
+        proving_key: &ProvingKey<ark_bn254::Bn254>,
         nft_root_old: F,
         exit_root_old: F,
     ) -> Result<String, Box<dyn Error>> {
@@ -203,7 +203,7 @@ impl FluxeClient {
 
         // Generate proof
         let mut rng = rand::thread_rng();
-        let proof = Groth16::<ark_bls12_381::Bls12_381>::prove(proving_key, circuit.clone(), &mut rng)?;
+        let proof = Groth16::<ark_bn254::Bn254>::prove(proving_key, circuit.clone(), &mut rng)?;
         // Get public inputs from circuit (would implement trait)
         let public_inputs = vec![];  // TODO: implement
 
@@ -243,7 +243,7 @@ impl FluxeClient {
         nks: Vec<F>,
         owner_sks: Vec<F>,
         cm_paths: Vec<MerklePath>,
-        proving_key: &ProvingKey<ark_bls12_381::Bls12_381>,
+        proving_key: &ProvingKey<ark_bn254::Bn254>,
         old_roots: (F, F), // (cmt_root_old, nft_root_old)
     ) -> Result<String, Box<dyn Error>> {
         use fluxe_circuits::utils::ec_helpers::get_pk_coords_circuit_compatible;
@@ -336,7 +336,7 @@ impl FluxeClient {
 
         // Generate proof
         let mut rng = rand::thread_rng();
-        let proof = Groth16::<ark_bls12_381::Bls12_381>::prove(proving_key, circuit.clone(), &mut rng)?;
+        let proof = Groth16::<ark_bn254::Bn254>::prove(proving_key, circuit.clone(), &mut rng)?;
         // Get public inputs from circuit (would implement trait)
         let public_inputs = vec![];  // TODO: implement
 
@@ -473,7 +473,7 @@ impl FluxeClient {
 
 // Helper functions
 
-fn serialize_proof(proof: &Proof<ark_bls12_381::Bls12_381>) -> Result<Vec<u8>, Box<dyn Error>> {
+fn serialize_proof(proof: &Proof<ark_bn254::Bn254>) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut bytes = Vec::new();
     proof.serialize_compressed(&mut bytes)?;
     Ok(bytes)

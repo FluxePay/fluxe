@@ -1,6 +1,6 @@
 /// Simple Pedersen commitment implementation that compiles and works
 /// This uses a simplified approach that avoids the complex EC operations
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_r1cs_std::{
     alloc::AllocVar,
     boolean::Boolean,

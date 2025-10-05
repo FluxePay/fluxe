@@ -1,6 +1,6 @@
 use crate::crypto::poseidon_hash;
 use crate::types::*;
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 /// Callback package sent from user to service provider

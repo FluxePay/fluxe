@@ -88,13 +88,13 @@ Key flows:
 - Attach off-chain actions or on-chain flags:
   - `CallbackEntry { method_id, expiry, provider_key, user_rand }`
   - `CallbackInvocation { ticket, payload, timestamp, signature? }`
-- Support Signature verification (**Schnorr on BLS12-381 G1**) and **sorted CB tree** membership proofs.
+- Support Signature verification (**Schnorr on BN254 G1**) and **sorted CB tree** membership proofs.
 
 ---
 
 ## Cryptographic Primitives
 
-- **Curve**: BLS12-381 (Scalar field `Fr`), plus **BabyJubJub** / Jubjub for in-circuit EC operations.
+- **Curve**: BN254 (Scalar field `Fr`), plus **Baby JubJub** (EdOnBN254) for in-circuit EC operations.
 - **Hash**: Poseidon (rate=8), identical configs in native and circuit code (see `fluxe-core/src/crypto/poseidon.rs` and `fluxe-circuits/src/gadgets/poseidon.rs`).
 - **Commitments**:
   - Value commitments in core: Pedersen (`fluxe-core/src/crypto/pedersen.rs`).

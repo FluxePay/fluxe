@@ -1,5 +1,5 @@
-use ark_bls12_381::Fr as F;
-use ark_ed_on_bls12_381::constraints::FqVar;
+use ark_bn254::Fr as F;
+use ark_ed_on_bn254::constraints::FqVar;
 use ark_r1cs_std::{
     boolean::Boolean,
     fields::fp::FpVar,
@@ -110,11 +110,11 @@ impl CallbackInvocationVar {
         })
     }
     
-    /// Verify the signature on this invocation using Schnorr on Jubjub
+    /// Verify the signature on this invocation using Schnorr on BabyJubJub
     /// 
     /// Parameters:
     /// - cs: Constraint system reference
-    /// - pk_x_fq, pk_y_fq: Provider's public key coordinates in Fq (Jubjub base field)
+    /// - pk_x_fq, pk_y_fq: Provider's public key coordinates in Fq (BabyJubJub base field)
     /// - r_x_fq, r_y_fq: Signature R point coordinates in Fq
     /// - s: Signature scalar in Fr
     pub fn verify_signature(

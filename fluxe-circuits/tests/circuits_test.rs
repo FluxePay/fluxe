@@ -1,4 +1,4 @@
-use ark_bls12_381::Fr as F;
+use ark_bn254::Fr as F;
 use ark_ff::UniformRand;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem};
 use fluxe_circuits::{
@@ -307,7 +307,7 @@ fn test_transfer_circuit_basic() {
             &PedersenRandomness { r: randomness },
         );
         
-        // Create consistent EC authentication using real Jubjub curve
+        // Create consistent EC authentication using real Baby JubJub curve
         let owner_sk = F::from((i + 1) as u64);
         let (pk_x, pk_y) = fluxe_core::crypto::compute_ec_public_key(owner_sk);
         let owner_addr = poseidon_hash(&[pk_x, pk_y]);

@@ -1,7 +1,7 @@
-use ark_bls12_381::Fr as F;
-use ark_ed_on_bls12_381::{
-    constraints::{EdwardsVar as JubjubVar, FqVar},
-    EdwardsProjective as Jubjub,
+use ark_bn254::Fr as F;
+use ark_ed_on_bn254::{
+    constraints::{EdwardsVar as BabyJubJubVar, FqVar},
+    EdwardsProjective as BabyJubJub,
 };
 use ark_r1cs_std::{
     alloc::AllocVar,
@@ -15,7 +15,7 @@ use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use crate::gadgets::poseidon::poseidon_hash_zk;
 use crate::gadgets::range_proof::RangeProofGadget;
 
-/// Schnorr verification gadget on Jubjub curve
+/// Schnorr verification gadget on Baby JubJub curve
 /// 
 /// SECURITY NOTE: Only use verify_with_fq_coords. The Fr-coordinate variant
 /// has been deprecated due to soundness issues.
@@ -33,7 +33,7 @@ impl SchnorrGadget {
         RangeProofGadget::le_bits_to_fp(&bits)
     }
     
-    /// Verify Schnorr signature with Jubjub curve point coordinates
+    /// Verify Schnorr signature with Baby JubJub curve point coordinates
     /// Takes coordinates as FqVar to ensure proper curve membership
     pub fn verify_with_fq_coords(
         cs: ConstraintSystemRef<F>,
@@ -57,12 +57,12 @@ impl SchnorrGadget {
 
         // Fixed generator
         use ark_ec::PrimeGroup;
-        let g = <Jubjub as PrimeGroup>::generator();
-        let g_var = JubjubVar::new_constant(cs.clone(), g)?;
+        let g = <BabyJubJub as PrimeGroup>::generator();
+        let g_var = BabyJubJubVar::new_constant(cs.clone(), g)?;
 
         // Build PK and R as group points using the Fq coordinates
-        let pk_point = JubjubVar::new(pk_x_fq.clone(), pk_y_fq.clone());
-        let r_point = JubjubVar::new(r_x_fq.clone(), r_y_fq.clone());
+        let pk_point = BabyJubJubVar::new(pk_x_fq.clone(), pk_y_fq.clone());
+        let r_point = BabyJubJubVar::new(r_x_fq.clone(), r_y_fq.clone());
 
         // s*G
         let s_bits = s.to_bits_le()?;
@@ -89,12 +89,12 @@ mod tests {
     
     #[test]
     fn test_schnorr_gadget_basic() {
-        use ark_ed_on_bls12_381::Fq;
+        use ark_ed_on_bn254::Fq;
         
         let cs = ConstraintSystem::<F>::new_ref();
         let mut rng = thread_rng();
         
-        // Create dummy Fq inputs for Jubjub coordinates
+        // Create dummy Fq inputs for BabyJubJub coordinates
         let pk_x = FqVar::new_witness(cs.clone(), || Ok(Fq::rand(&mut rng))).unwrap();
         let pk_y = FqVar::new_witness(cs.clone(), || Ok(Fq::rand(&mut rng))).unwrap();
         let r_x = FqVar::new_witness(cs.clone(), || Ok(Fq::rand(&mut rng))).unwrap();
