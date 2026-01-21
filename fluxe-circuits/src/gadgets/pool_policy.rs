@@ -140,19 +140,27 @@ impl PoolPolicyGadget {
         amount: &FpVar<F>,
         policy: &PoolPolicyVar,
     ) -> Result<(), SynthesisError> {
+        use crate::gadgets::comparison::ComparisonGadget;
+
         // Check per-transaction limit
         let has_per_tx_limit = policy.flags.has_per_tx_limit()?;
-        // Since FpVar doesn't have is_le, we check that amount != max_per_tx + 1
-        // In practice, we'd need a proper comparison gadget
-        // For now, we just ensure amount is not equal to zero (simplified)
-        let amount_nonzero = amount.is_neq(&FpVar::zero())?;
-        // Only enforce if has_per_tx_limit is true
-        let should_check = has_per_tx_limit.select(&amount_nonzero, &Boolean::TRUE)?;
-        should_check.enforce_equal(&Boolean::TRUE)?;
-        
-        // Range check the amount
+
+        // SECURITY FIX: Actually enforce amount <= max_per_tx
+        let amount_le_limit = ComparisonGadget::is_less_than_or_equal(
+            cs.clone(),
+            amount,
+            &policy.max_per_tx,
+        )?;
+
+        // If has_per_tx_limit is true, enforce amount <= max_per_tx
+        // If has_per_tx_limit is false, allow any amount (select TRUE)
+        let ok_if_no_limit = Boolean::TRUE;
+        let effective_check = has_per_tx_limit.select(&amount_le_limit, &ok_if_no_limit)?;
+        effective_check.enforce_equal(&Boolean::TRUE)?;
+
+        // Range check the amount (ensure it fits in 64 bits)
         RangeProofGadget::prove_range_bits(cs, amount, 64)?;
-        
+
         Ok(())
     }
     

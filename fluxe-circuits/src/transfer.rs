@@ -461,43 +461,50 @@ impl ConstraintSynthesizer<F> for TransferCircuit {
         }
         
         // Constraint 6: Sanctions non-membership checks
+        // SECURITY CRITICAL: Sanctions proofs are MANDATORY - no fallback allowed
         // Note: sanctions_root_var was already created as public input
-        
+
         // Check sender addresses (input note owners) are not sanctioned
         for (i, note_var) in notes_in_var.iter().enumerate() {
             if i < self.sanctions_nm_proofs_in.len() {
                 if let Some(ref nm_proof) = self.sanctions_nm_proofs_in[i] {
                     let nm_proof_var = RangePathVar::new_witness(cs.clone(), || Ok(nm_proof.clone()))?;
-                    
+
                     // Verify the proof target matches the owner address
                     nm_proof_var.target.enforce_equal(&note_var.owner_addr)?;
-                    
+
                     // Verify non-membership in sanctions list
                     nm_proof_var.enforce_valid(&sanctions_root_var)?;
                 } else {
-                    // Fallback: check address is valid (non-zero)
-                    let addr_nonzero = note_var.owner_addr.is_neq(&FpVar::zero())?;
-                    addr_nonzero.enforce_equal(&Boolean::TRUE)?;
+                    // SECURITY: Sanctions non-membership proof is REQUIRED
+                    // Without it, sanctioned entities could bypass screening
+                    return Err(SynthesisError::Unsatisfiable);
                 }
+            } else {
+                // SECURITY: Sanctions non-membership proof is REQUIRED for all inputs
+                return Err(SynthesisError::Unsatisfiable);
             }
         }
-        
+
         // Check recipient addresses (output note owners) are not sanctioned
         for (i, note_var) in notes_out_var.iter().enumerate() {
             if i < self.sanctions_nm_proofs_out.len() {
                 if let Some(ref nm_proof) = self.sanctions_nm_proofs_out[i] {
                     let nm_proof_var = RangePathVar::new_witness(cs.clone(), || Ok(nm_proof.clone()))?;
-                    
+
                     // Verify the proof target matches the owner address
                     nm_proof_var.target.enforce_equal(&note_var.owner_addr)?;
-                    
+
                     // Verify non-membership in sanctions list
                     nm_proof_var.enforce_valid(&sanctions_root_var)?;
                 } else {
-                    // Fallback: check address is valid (non-zero)
-                    let addr_nonzero = note_var.owner_addr.is_neq(&FpVar::zero())?;
-                    addr_nonzero.enforce_equal(&Boolean::TRUE)?;
+                    // SECURITY: Sanctions non-membership proof is REQUIRED
+                    // Without it, sanctioned entities could bypass screening
+                    return Err(SynthesisError::Unsatisfiable);
                 }
+            } else {
+                // SECURITY: Sanctions non-membership proof is REQUIRED for all outputs
+                return Err(SynthesisError::Unsatisfiable);
             }
         }
         

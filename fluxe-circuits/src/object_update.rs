@@ -235,24 +235,25 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
                     cs.clone(),
                     || Ok(invocation.clone()),
                 )?;
-                
+
                 // Verify callback ticket matches
                 callback_var.ticket.enforce_equal(&invocation_var.ticket)?;
-                
-                // Verify invocation is in CB_ROOT using S-IMT membership proof
+
+                // SECURITY CRITICAL: Verify invocation is in CB_ROOT using S-IMT membership proof
+                // Membership proof is REQUIRED - no fallback allowed
                 if let Some(ref cb_path) = self.cb_path {
                     let cb_path_var = MerklePathVar::new_witness(
                         cs.clone(),
                         || Ok(cb_path.clone()),
                     )?;
-                    
+
                     // Verify the invocation hash matches the leaf in the path
                     let invocation_hash = invocation_var.hash()?;
                     invocation_hash.enforce_equal(&cb_path_var.leaf)?;
-                    
+
                     // Verify the path is valid against CB_ROOT
                     cb_path_var.enforce_valid(&cb_root_var)?;
-                    
+
                     // Verify signature on invocation payload
                     if invocation.signature.is_some() && self.callback_signature.is_some() {
                         // Witness the signature components (Fq for curve points, Fr for scalar)
@@ -262,7 +263,7 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
                         let r_x_var = FqVar::new_witness(cs.clone(), || Ok(r_x))?;
                         let r_y_var = FqVar::new_witness(cs.clone(), || Ok(r_y))?;
                         let s_var = FpVar::new_witness(cs.clone(), || Ok(s))?;
-                        
+
                         // Verify Schnorr signature with proper Fq coordinates
                         let sig_valid = invocation_var.verify_signature(
                             cs.clone(),
@@ -278,10 +279,9 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
                         return Err(SynthesisError::AssignmentMissing);
                     }
                 } else {
-                    // Fallback: simplified check
-                    let invocation_hash = invocation_var.hash()?;
-                    let is_valid = invocation_hash.is_neq(&FpVar::zero())?;
-                    is_valid.enforce_equal(&Boolean::TRUE)?;
+                    // SECURITY: Callback membership proof is REQUIRED when invocation exists
+                    // Without it, clients could fake callback invocations
+                    return Err(SynthesisError::Unsatisfiable);
                 }
                 
                 // TODO: Decrypt and verify callback payload
@@ -294,21 +294,26 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
                 time_valid.enforce_equal(&Boolean::TRUE)?;
             } else {
                 // Timeout path: verify callback expired AND not invoked
-                
+                // SECURITY CRITICAL: Both non-membership proof and expiry check are REQUIRED
+
                 // First, verify non-membership in CB_ROOT (callback not invoked)
                 if let Some(ref nm_proof) = self.cb_nonmembership {
                     let nm_proof_var = RangePathVar::new_witness(
                         cs.clone(),
                         || Ok(nm_proof.clone()),
                     )?;
-                    
+
                     // Verify the proof target matches the callback ticket
                     nm_proof_var.target.enforce_equal(&callback_var.ticket)?;
-                    
+
                     // Verify non-membership (gap proof)
                     nm_proof_var.enforce_valid(&cb_root_var)?;
+                } else {
+                    // SECURITY: Non-membership proof is REQUIRED for timeout path
+                    // Without it, clients could claim timeout without proving non-invocation
+                    return Err(SynthesisError::Unsatisfiable);
                 }
-                
+
                 // Then verify expiry time has passed
                 let expiry_time = callback_var.expiry_time.clone();
                 // Check current_time > expiry_time (simplified)
@@ -331,9 +336,10 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
         let cm_obj_new = obj_new_var.commitment_with_randomness(&obj_new_rand_var)?;
         
         // Constraint 7: Verify OBJ_ROOT_new transition using proper append proof
+        // SECURITY CRITICAL: Proper IMT append witness is REQUIRED
         if let Some(ref append_witness) = self.obj_append_witness {
             use crate::gadgets::merkle_append::ImtAppendProofVar;
-            
+
             // Create the append proof variable
             let obj_append_proof = ImtAppendProofVar {
                 old_root: obj_root_old_var.clone(),
@@ -346,17 +352,13 @@ impl ConstraintSynthesizer<F> for ObjectUpdateCircuit {
                     .collect::<Result<Vec<_>, _>>()?,
                 height: append_witness.height,
             };
-            
+
             // Verify the append is valid
             obj_append_proof.enforce()?;
         } else {
-            // If no witness provided, fall back to simple hash (for backward compatibility)
-            // In production, this should be required
-            let computed_root = poseidon_hash_zk(&[
-                obj_root_old_var.clone(),
-                cm_obj_new,
-            ])?;
-            computed_root.enforce_equal(&obj_root_new_var)?;
+            // SECURITY: Proper append witness is REQUIRED
+            // Without it, the tree structure is not maintained correctly
+            return Err(SynthesisError::Unsatisfiable);
         }
         
         Ok(())

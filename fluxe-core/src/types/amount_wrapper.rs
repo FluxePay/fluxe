@@ -11,19 +11,27 @@ impl Amount {
     pub fn new(value: u128) -> Self {
         Self(value)
     }
-    
+
     pub fn zero() -> Self {
         Self(0)
     }
-    
+
     pub fn value(&self) -> u128 {
         self.0
     }
-    
+
     /// Convert to field element (may truncate if amount is too large)
     pub fn to_field(&self) -> F {
         // Safe for amounts up to ~2^64 which is sufficient for real-world use
         F::from(self.0 as u64)
+    }
+
+    /// Convert from field element (extracts low 64 bits)
+    pub fn from_field(f: &F) -> Self {
+        use ark_ff::PrimeField;
+        let bigint = f.into_bigint();
+        let value = bigint.as_ref()[0]; // Get the lowest limb which is u64
+        Self(value as u128)
     }
 }
 

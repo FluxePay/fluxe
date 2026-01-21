@@ -11,6 +11,164 @@ use ark_serialize::CanonicalSerialize;
 use ark_snark::SNARK;
 use tracing::{debug, error, info, instrument, trace, warn};
 
+/// Public inputs for MintCircuit
+#[derive(Debug, Clone, PartialEq)]
+pub struct MintPublicInputs {
+    pub cmt_root_old: MerkleRoot,
+    pub cmt_root_new: MerkleRoot,
+    pub ingress_root_old: MerkleRoot,
+    pub ingress_root_new: MerkleRoot,
+    pub asset_type: AssetType,
+    pub amount: Amount,
+    pub cm_out_list_commit: F,
+}
+
+/// Public inputs for BurnCircuit
+#[derive(Debug, Clone, PartialEq)]
+pub struct BurnPublicInputs {
+    pub cmt_root: MerkleRoot,
+    pub nft_root_old: MerkleRoot,
+    pub nft_root_new: MerkleRoot,
+    pub exit_root_old: MerkleRoot,
+    pub exit_root_new: MerkleRoot,
+    pub asset_type: AssetType,
+    pub amount: Amount,
+    pub nf_in: Nullifier,
+}
+
+/// Public inputs for TransferCircuit
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransferPublicInputs {
+    pub cmt_root_old: MerkleRoot,
+    pub cmt_root_new: MerkleRoot,
+    pub nft_root_old: MerkleRoot,
+    pub nft_root_new: MerkleRoot,
+    pub sanctions_root: MerkleRoot,
+    pub pool_rules_root: MerkleRoot,
+    pub nf_list: Vec<Nullifier>,
+    pub cm_list: Vec<Commitment>,
+    pub fee: Amount,
+}
+
+/// Public inputs for ObjectUpdateCircuit
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectUpdatePublicInputs {
+    pub obj_root_old: MerkleRoot,
+    pub obj_root_new: MerkleRoot,
+    pub cb_root: MerkleRoot,
+    pub current_time: Time,
+}
+
+/// Parse public inputs for MintCircuit
+/// Order: [cmt_root_old, cmt_root_new, ingress_root_old, ingress_root_new, asset_type, amount, cm_out_list_commit]
+fn parse_mint_public_inputs(inputs: &[F]) -> Result<MintPublicInputs, FluxeError> {
+    use ark_ff::PrimeField;
+
+    if inputs.len() != 7 {
+        return Err(FluxeError::Verification(format!(
+            "Invalid Mint public inputs length: expected 7, got {}",
+            inputs.len()
+        )));
+    }
+
+    Ok(MintPublicInputs {
+        cmt_root_old: inputs[0],
+        cmt_root_new: inputs[1],
+        ingress_root_old: inputs[2],
+        ingress_root_new: inputs[3],
+        asset_type: inputs[4].into_bigint().as_ref()[0] as u32,
+        amount: Amount::from_field(&inputs[5]),
+        cm_out_list_commit: inputs[6],
+    })
+}
+
+/// Parse public inputs for BurnCircuit
+/// Order: [cmt_root, nft_root_old, nft_root_new, exit_root_old, exit_root_new, asset_type, amount, nf_in]
+fn parse_burn_public_inputs(inputs: &[F]) -> Result<BurnPublicInputs, FluxeError> {
+    use ark_ff::PrimeField;
+
+    if inputs.len() != 8 {
+        return Err(FluxeError::Verification(format!(
+            "Invalid Burn public inputs length: expected 8, got {}",
+            inputs.len()
+        )));
+    }
+
+    Ok(BurnPublicInputs {
+        cmt_root: inputs[0],
+        nft_root_old: inputs[1],
+        nft_root_new: inputs[2],
+        exit_root_old: inputs[3],
+        exit_root_new: inputs[4],
+        asset_type: inputs[5].into_bigint().as_ref()[0] as u32,
+        amount: Amount::from_field(&inputs[6]),
+        nf_in: inputs[7],
+    })
+}
+
+/// Parse public inputs for TransferCircuit
+/// Order: [cmt_root_old, cmt_root_new, nft_root_old, nft_root_new, sanctions_root, pool_rules_root, nf_list..., cm_list..., fee]
+/// Note: The number of nullifiers and commitments varies, so we need to determine the split
+fn parse_transfer_public_inputs(inputs: &[F], num_inputs: usize, num_outputs: usize) -> Result<TransferPublicInputs, FluxeError> {
+    let expected_len = 6 + num_inputs + num_outputs + 1; // 6 roots + nullifiers + commitments + fee
+
+    if inputs.len() != expected_len {
+        return Err(FluxeError::Verification(format!(
+            "Invalid Transfer public inputs length: expected {}, got {}",
+            expected_len,
+            inputs.len()
+        )));
+    }
+
+    let mut idx = 0;
+    let cmt_root_old = inputs[idx]; idx += 1;
+    let cmt_root_new = inputs[idx]; idx += 1;
+    let nft_root_old = inputs[idx]; idx += 1;
+    let nft_root_new = inputs[idx]; idx += 1;
+    let sanctions_root = inputs[idx]; idx += 1;
+    let pool_rules_root = inputs[idx]; idx += 1;
+
+    let nf_list: Vec<F> = inputs[idx..idx + num_inputs].to_vec();
+    idx += num_inputs;
+
+    let cm_list: Vec<F> = inputs[idx..idx + num_outputs].to_vec();
+    idx += num_outputs;
+
+    let fee = Amount::from_field(&inputs[idx]);
+
+    Ok(TransferPublicInputs {
+        cmt_root_old,
+        cmt_root_new,
+        nft_root_old,
+        nft_root_new,
+        sanctions_root,
+        pool_rules_root,
+        nf_list,
+        cm_list,
+        fee,
+    })
+}
+
+/// Parse public inputs for ObjectUpdateCircuit
+/// Order: [obj_root_old, obj_root_new, cb_root, current_time]
+fn parse_object_update_public_inputs(inputs: &[F]) -> Result<ObjectUpdatePublicInputs, FluxeError> {
+    use ark_ff::PrimeField;
+
+    if inputs.len() != 4 {
+        return Err(FluxeError::Verification(format!(
+            "Invalid ObjectUpdate public inputs length: expected 4, got {}",
+            inputs.len()
+        )));
+    }
+
+    Ok(ObjectUpdatePublicInputs {
+        obj_root_old: inputs[0],
+        obj_root_new: inputs[1],
+        cb_root: inputs[2],
+        current_time: inputs[3].into_bigint().as_ref()[0],
+    })
+}
+
 /// Server-side batch verifier implementing section 12.4 of the spec
 /// Verifies client proofs and deterministically reapplies Merkle operations
 pub struct ServerVerifier {
@@ -181,31 +339,145 @@ impl ServerVerifier {
             TransactionType::ObjectUpdate => &self.vk_object_update,
         };
 
+        // Step 1: Verify the Groth16 proof
         let verified = Groth16::<ark_bn254::Bn254>::verify(vk, &tx.public_inputs, &tx.proof)
             .map_err(|e| {
                 error!("Proof verification failed for {:?}: {}", tx.tx_type, e);
                 FluxeError::Verification(format!("Groth16 verification failed: {}", e))
             })?;
-        
+
         if !verified {
             return Err(FluxeError::Verification("Proof verification failed".to_string()));
         }
-        
+
+        // Step 2: Parse public inputs and verify roots match server state
+        // SECURITY CRITICAL: This prevents clients from proving things about a different Merkle forest
+        let current_state = self.state.get_roots();
+
+        match tx.tx_type {
+            TransactionType::Mint => {
+                let parsed = parse_mint_public_inputs(&tx.public_inputs)?;
+
+                // Assert old roots match current server state
+                if parsed.cmt_root_old != current_state.cmt_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Mint: CMT root mismatch. Expected {:?}, got {:?}",
+                        current_state.cmt_root, parsed.cmt_root_old
+                    )));
+                }
+                if parsed.ingress_root_old != current_state.ingress_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Mint: Ingress root mismatch. Expected {:?}, got {:?}",
+                        current_state.ingress_root, parsed.ingress_root_old
+                    )));
+                }
+
+                trace!("Mint proof roots verified against server state");
+            }
+            TransactionType::Burn => {
+                let parsed = parse_burn_public_inputs(&tx.public_inputs)?;
+
+                // Assert old roots match current server state
+                if parsed.cmt_root != current_state.cmt_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Burn: CMT root mismatch. Expected {:?}, got {:?}",
+                        current_state.cmt_root, parsed.cmt_root
+                    )));
+                }
+                if parsed.nft_root_old != current_state.nft_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Burn: NFT root mismatch. Expected {:?}, got {:?}",
+                        current_state.nft_root, parsed.nft_root_old
+                    )));
+                }
+                if parsed.exit_root_old != current_state.exit_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Burn: Exit root mismatch. Expected {:?}, got {:?}",
+                        current_state.exit_root, parsed.exit_root_old
+                    )));
+                }
+
+                trace!("Burn proof roots verified against server state");
+            }
+            TransactionType::Transfer => {
+                // For transfer, we need to know the number of inputs/outputs
+                // Extract this from the transaction data
+                let (num_inputs, num_outputs) = match &tx.transaction_data {
+                    TransactionData::Transfer { nullifiers, notes_out } => {
+                        (nullifiers.len(), notes_out.len())
+                    }
+                    _ => return Err(FluxeError::Verification(
+                        "Transfer transaction type mismatch".to_string()
+                    )),
+                };
+
+                let parsed = parse_transfer_public_inputs(&tx.public_inputs, num_inputs, num_outputs)?;
+
+                // Assert old roots match current server state
+                if parsed.cmt_root_old != current_state.cmt_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Transfer: CMT root mismatch. Expected {:?}, got {:?}",
+                        current_state.cmt_root, parsed.cmt_root_old
+                    )));
+                }
+                if parsed.nft_root_old != current_state.nft_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Transfer: NFT root mismatch. Expected {:?}, got {:?}",
+                        current_state.nft_root, parsed.nft_root_old
+                    )));
+                }
+                if parsed.sanctions_root != current_state.sanctions_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Transfer: Sanctions root mismatch. Expected {:?}, got {:?}",
+                        current_state.sanctions_root, parsed.sanctions_root
+                    )));
+                }
+                if parsed.pool_rules_root != current_state.pool_rules_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Transfer: Pool rules root mismatch. Expected {:?}, got {:?}",
+                        current_state.pool_rules_root, parsed.pool_rules_root
+                    )));
+                }
+
+                trace!("Transfer proof roots verified against server state");
+            }
+            TransactionType::ObjectUpdate => {
+                let parsed = parse_object_update_public_inputs(&tx.public_inputs)?;
+
+                // Assert old roots match current server state
+                if parsed.obj_root_old != current_state.obj_root {
+                    return Err(FluxeError::Verification(format!(
+                        "ObjectUpdate: Object root mismatch. Expected {:?}, got {:?}",
+                        current_state.obj_root, parsed.obj_root_old
+                    )));
+                }
+                if parsed.cb_root != current_state.cb_root {
+                    return Err(FluxeError::Verification(format!(
+                        "ObjectUpdate: Callback root mismatch. Expected {:?}, got {:?}",
+                        current_state.cb_root, parsed.cb_root
+                    )));
+                }
+
+                trace!("ObjectUpdate proof roots verified against server state");
+            }
+        }
+
         Ok(())
     }
     
-    /// Apply a single transaction's state changes
+    /// Apply a single transaction's state changes and verify new roots match proof
     fn apply_single_transaction(&mut self, tx: &VerifiedTransaction) -> Result<(), FluxeError> {
+        // Apply the state changes
         match &tx.transaction_data {
             TransactionData::Mint { ingress_receipt, notes_out, asset_type, amount, .. } => {
                 // 1. Append ingress receipt
                 self.state.ingress_tree.append(ingress_receipt.hash());
-                
+
                 // 2. Append output note commitments
                 for note in notes_out {
                     self.state.cmt_tree.append(note.commitment());
                 }
-                
+
                 // 3. Update supply
                 let supply = self.state.supply
                     .entry(*asset_type)
@@ -218,10 +490,10 @@ impl ServerVerifier {
                     return Err(FluxeError::StateManagement(StateError::DoubleSpend(format!("{:?}", nullifier))));
                 }
                 self.state.nft_tree.insert(*nullifier).map_err(|e| FluxeError::Other(e))?;
-                
+
                 // 2. Append exit receipt
                 self.state.exit_tree.append(exit_receipt.hash());
-                
+
                 // 3. Update supply
                 let supply = self.state.supply
                     .entry(*asset_type)
@@ -239,7 +511,7 @@ impl ServerVerifier {
                     }
                     self.state.nft_tree.insert(nf).map_err(|e| FluxeError::Other(e))?;
                 }
-                
+
                 // 2. Append output note commitments
                 for note in notes_out {
                     self.state.cmt_tree.append(note.commitment());
@@ -257,12 +529,100 @@ impl ServerVerifier {
                         }
                     }
                 }
-                
+
                 // 2. Append new object commitment
                 self.state.obj_tree.append(*new_object_cm);
             }
         }
-        
+
+        // SECURITY CRITICAL: Verify new roots from proof match the computed state after replay
+        self.verify_new_roots_match_proof(tx)?;
+
+        Ok(())
+    }
+
+    /// Verify that new roots from proof match the state after applying the transaction
+    fn verify_new_roots_match_proof(&self, tx: &VerifiedTransaction) -> Result<(), FluxeError> {
+        let computed_state = self.state.get_roots();
+
+        match tx.tx_type {
+            TransactionType::Mint => {
+                let parsed = parse_mint_public_inputs(&tx.public_inputs)?;
+
+                if parsed.cmt_root_new != computed_state.cmt_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Mint: Computed CMT root {:?} != proof's new CMT root {:?}",
+                        computed_state.cmt_root, parsed.cmt_root_new
+                    )));
+                }
+                if parsed.ingress_root_new != computed_state.ingress_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Mint: Computed Ingress root {:?} != proof's new Ingress root {:?}",
+                        computed_state.ingress_root, parsed.ingress_root_new
+                    )));
+                }
+
+                trace!("Mint: New roots verified");
+            }
+            TransactionType::Burn => {
+                let parsed = parse_burn_public_inputs(&tx.public_inputs)?;
+
+                if parsed.nft_root_new != computed_state.nft_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Burn: Computed NFT root {:?} != proof's new NFT root {:?}",
+                        computed_state.nft_root, parsed.nft_root_new
+                    )));
+                }
+                if parsed.exit_root_new != computed_state.exit_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Burn: Computed Exit root {:?} != proof's new Exit root {:?}",
+                        computed_state.exit_root, parsed.exit_root_new
+                    )));
+                }
+
+                trace!("Burn: New roots verified");
+            }
+            TransactionType::Transfer => {
+                let (num_inputs, num_outputs) = match &tx.transaction_data {
+                    TransactionData::Transfer { nullifiers, notes_out } => {
+                        (nullifiers.len(), notes_out.len())
+                    }
+                    _ => return Err(FluxeError::Verification(
+                        "Transfer transaction type mismatch".to_string()
+                    )),
+                };
+
+                let parsed = parse_transfer_public_inputs(&tx.public_inputs, num_inputs, num_outputs)?;
+
+                if parsed.cmt_root_new != computed_state.cmt_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Transfer: Computed CMT root {:?} != proof's new CMT root {:?}",
+                        computed_state.cmt_root, parsed.cmt_root_new
+                    )));
+                }
+                if parsed.nft_root_new != computed_state.nft_root {
+                    return Err(FluxeError::Verification(format!(
+                        "Transfer: Computed NFT root {:?} != proof's new NFT root {:?}",
+                        computed_state.nft_root, parsed.nft_root_new
+                    )));
+                }
+
+                trace!("Transfer: New roots verified");
+            }
+            TransactionType::ObjectUpdate => {
+                let parsed = parse_object_update_public_inputs(&tx.public_inputs)?;
+
+                if parsed.obj_root_new != computed_state.obj_root {
+                    return Err(FluxeError::Verification(format!(
+                        "ObjectUpdate: Computed Object root {:?} != proof's new Object root {:?}",
+                        computed_state.obj_root, parsed.obj_root_new
+                    )));
+                }
+
+                trace!("ObjectUpdate: New roots verified");
+            }
+        }
+
         Ok(())
     }
     
