@@ -312,7 +312,30 @@ pub fn create_transfer_circuit<R: RngCore>(rng: &mut R, num_inputs: usize, num_o
     }
     
     let cmt_root_new = cmt_tree.root();
-    
+
+    // SECURITY FIX: Generate proper sanctions non-membership proofs
+    // Create a sanctions tree with some sanctioned addresses (but not our test addresses)
+    let mut sanctions_tree = SortedTree::new(16);
+    let _ = sanctions_tree.insert(F::from(0u64)); // Sentinel
+    // Add some dummy sanctioned addresses (different from our test addresses)
+    let _ = sanctions_tree.insert(F::from(99999u64));
+    let _ = sanctions_tree.insert(F::from(88888u64));
+    let sanctions_root = sanctions_tree.root();
+
+    // Generate sanctions non-membership proofs for input note owners
+    let mut sanctions_nm_proofs_in = Vec::new();
+    for note in &notes_in {
+        let nm_proof = sanctions_tree.prove_non_membership(note.owner_addr).unwrap();
+        sanctions_nm_proofs_in.push(Some(nm_proof));
+    }
+
+    // Generate sanctions non-membership proofs for output note owners
+    let mut sanctions_nm_proofs_out = Vec::new();
+    for note in &notes_out {
+        let nm_proof = sanctions_tree.prove_non_membership(note.owner_addr).unwrap();
+        sanctions_nm_proofs_out.push(Some(nm_proof));
+    }
+
     TransferCircuit {
         notes_in,
         values_in,
@@ -325,8 +348,8 @@ pub fn create_transfer_circuit<R: RngCore>(rng: &mut R, num_inputs: usize, num_o
         owner_pks,
         cm_paths,
         nf_nonmembership_proofs: nf_nonmembership_proofs.clone(),
-        sanctions_nm_proofs_in: vec![None; num_inputs],
-        sanctions_nm_proofs_out: vec![None; num_outputs],
+        sanctions_nm_proofs_in,
+        sanctions_nm_proofs_out,
         cmt_paths_out: vec![],
         nf_nonmembership: nf_nonmembership_proofs,
         source_pool_policies: vec![],
@@ -338,7 +361,7 @@ pub fn create_transfer_circuit<R: RngCore>(rng: &mut R, num_inputs: usize, num_o
         cmt_root_new,
         nft_root_old,
         nft_root_new,
-        sanctions_root: F::from(999999u64),
+        sanctions_root,
         pool_rules_root: F::from(888888u64),
         nf_list,
         cm_list,
