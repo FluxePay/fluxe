@@ -27,7 +27,13 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 toml = "0.8"
 num_cpus = "1.16"
+rocksdb = { version = "0.22", optional = true }
+bincode = "1.3"
 
 [features]
 default = ["parallel"]
 parallel = ["ark-ff/parallel", "ark-ec/parallel"]
+persistence = ["rocksdb"]
+
+[dev-dependencies]
+tempfile = "3"

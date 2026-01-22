@@ -7,6 +7,7 @@ pub mod merkle;
 pub mod sequencer;
 pub mod state_manager;
 pub mod server_verifier;
+pub mod storage;
 pub mod types;
 pub mod utils;
 
@@ -19,4 +20,5 @@ pub use merkle::*;
 pub use sequencer::*;
 pub use state_manager::*;
 pub use server_verifier::*;
+pub use storage::*;
 pub use types::*;
