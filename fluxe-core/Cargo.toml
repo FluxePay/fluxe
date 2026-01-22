@@ -53,3 +53,20 @@ integration-tests = []
 
 [dev-dependencies]
 tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "merkle_bench"
+harness = false
+
+[[bench]]
+name = "state_bench"
+harness = false
+
+[[bench]]
+name = "sequencer_bench"
+harness = false
+
+[[bench]]
+name = "fee_bench"
+harness = false
