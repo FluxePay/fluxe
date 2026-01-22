@@ -9,6 +9,8 @@ use crate::gadgets::poseidon::poseidon_hash_zk;
 /// Ingress receipt variable for circuits
 #[derive(Clone)]
 pub struct IngressReceiptVar {
+    /// Source chain ID (critical for preventing cross-chain replay attacks)
+    pub source_chain: FpVar<F>,
     pub asset_type: FpVar<F>,
     pub amount: FpVar<F>,
     pub beneficiary_cm: FpVar<F>,
@@ -23,8 +25,9 @@ impl IngressReceiptVar {
         receipt: impl FnOnce() -> Result<IngressReceipt, SynthesisError>,
     ) -> Result<Self, SynthesisError> {
         let receipt = receipt()?;
-        
+
         Ok(Self {
+            source_chain: FpVar::new_witness(cs.clone(), || Ok(F::from(receipt.source_chain as u64)))?,
             asset_type: FpVar::new_witness(cs.clone(), || Ok(F::from(receipt.asset_type as u64)))?,
             amount: FpVar::new_witness(cs.clone(), || Ok(receipt.amount.to_field()))?,
             beneficiary_cm: FpVar::new_witness(cs.clone(), || Ok(receipt.beneficiary_cm))?,
@@ -32,10 +35,12 @@ impl IngressReceiptVar {
             aux: FpVar::new_witness(cs, || Ok(receipt.aux))?,
         })
     }
-    
+
     /// Compute hash of this receipt
+    /// Note: source_chain is placed first to prevent cross-chain replay attacks
     pub fn hash(&self) -> Result<FpVar<F>, SynthesisError> {
         poseidon_hash_zk(&[
+            self.source_chain.clone(),
             self.asset_type.clone(),
             self.amount.clone(),
             self.beneficiary_cm.clone(),
@@ -48,6 +53,8 @@ impl IngressReceiptVar {
 /// Exit receipt variable for circuits
 #[derive(Clone)]
 pub struct ExitReceiptVar {
+    /// Destination chain ID (critical for preventing cross-chain replay attacks)
+    pub destination_chain: FpVar<F>,
     pub asset_type: FpVar<F>,
     pub amount: FpVar<F>,
     pub burned_nf: FpVar<F>,
@@ -62,8 +69,9 @@ impl ExitReceiptVar {
         receipt: impl FnOnce() -> Result<ExitReceipt, SynthesisError>,
     ) -> Result<Self, SynthesisError> {
         let receipt = receipt()?;
-        
+
         Ok(Self {
+            destination_chain: FpVar::new_witness(cs.clone(), || Ok(F::from(receipt.destination_chain as u64)))?,
             asset_type: FpVar::new_witness(cs.clone(), || Ok(F::from(receipt.asset_type as u64)))?,
             amount: FpVar::new_witness(cs.clone(), || Ok(receipt.amount.to_field()))?,
             burned_nf: FpVar::new_witness(cs.clone(), || Ok(receipt.burned_nf))?,
@@ -71,10 +79,12 @@ impl ExitReceiptVar {
             aux: FpVar::new_witness(cs, || Ok(receipt.aux))?,
         })
     }
-    
+
     /// Compute hash of this receipt
+    /// Note: destination_chain is placed first to prevent cross-chain replay attacks
     pub fn hash(&self) -> Result<FpVar<F>, SynthesisError> {
         poseidon_hash_zk(&[
+            self.destination_chain.clone(),
             self.asset_type.clone(),
             self.amount.clone(),
             self.burned_nf.clone(),

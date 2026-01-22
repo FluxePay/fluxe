@@ -15,6 +15,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 use crate::error::FluxeError;
+use crate::groth16::{Groth16Verifier, FLUXE_VERIFYING_KEY, FLUXE_NR_PUBLIC_INPUTS};
 use crate::state::*;
 use crate::utils::verify_merkle_proof;
 use crate::MAX_ASSET_TYPES;
@@ -371,6 +372,25 @@ pub mod fluxe_bridge_v2 {
         Ok(())
     }
 
+    /// Initialize a vault for a registered asset type
+    ///
+    /// This creates a PDA-owned token account that holds deposited tokens.
+    /// Must be called after registering an asset type.
+    pub fn initialize_vault(ctx: Context<InitializeVault>, asset_type: u32) -> Result<()> {
+        require!(asset_type < MAX_ASSET_TYPES as u32, FluxeError::InvalidAssetType);
+
+        // Vault is initialized via init constraint in the context
+        // Just emit the event for tracking
+        emit!(VaultInitializedV2 {
+            asset_type,
+            vault: ctx.accounts.vault.key(),
+            mint: ctx.accounts.mint.key(),
+        });
+
+        msg!("Vault initialized for asset type {} at {}", asset_type, ctx.accounts.vault.key());
+        Ok(())
+    }
+
     /// Deposit tokens into FLUXE L2 (adds to priority queue)
     pub fn deposit_v2(
         ctx: Context<DepositV2>,
@@ -563,13 +583,29 @@ pub mod fluxe_bridge_v2 {
             FluxeError::StateRootsMismatch
         );
 
-        // In ZK mode, we would verify the proof here via CPI to Groth16 verifier
-        // For now, we accept the proof if verification mode is Optimistic
-        // In production, this would invoke the verifier program
+        // In ZK mode, verify the Groth16 proof using groth16-solana
         if bridge.verification_mode == VerificationMode::ZkProof {
-            // TODO: CPI to Groth16 verifier program
-            // verify_groth16_proof(proof_a, proof_b, proof_c, public_inputs)?;
-            msg!("ZK proof verification would be performed here via CPI");
+            // Build public inputs from state roots hash and batch metadata
+            // Format: [state_roots_hash, batch_id as 32-byte BE, tx_count as 32-byte BE]
+            let mut public_inputs: [[u8; 32]; FLUXE_NR_PUBLIC_INPUTS] = [[0u8; 32]; FLUXE_NR_PUBLIC_INPUTS];
+            public_inputs[0] = commitment.state_roots_hash;
+            public_inputs[1][24..32].copy_from_slice(&batch_id.to_be_bytes());
+            public_inputs[2][28..32].copy_from_slice(&commitment.tx_count.to_be_bytes());
+
+            // Create verifier and verify proof
+            let mut verifier = Groth16Verifier::new(
+                &proof_a,
+                &proof_b,
+                &proof_c,
+                &public_inputs,
+                &FLUXE_VERIFYING_KEY,
+            ).map_err(|_| FluxeError::Groth16ProofInvalid)?;
+
+            verifier.verify().map_err(|_| FluxeError::Groth16ProofInvalid)?;
+
+            msg!("Groth16 proof verified successfully for batch {}", batch_id);
+        } else {
+            msg!("Optimistic mode: skipping ZK proof verification");
         }
 
         let clock = Clock::get()?;
@@ -745,6 +781,9 @@ pub mod fluxe_bridge_v2 {
             verify_merkle_proof(&merkle_proof, batch_state.roots.exit_root, exit_receipt_hash),
             FluxeError::InvalidExitProof
         );
+
+        // Validate asset type is within bounds
+        require!(asset_type < MAX_ASSET_TYPES as u32, FluxeError::InvalidAssetType);
 
         // Check pool has sufficient liquidity
         require!(
@@ -965,6 +1004,45 @@ pub struct RegisterAssetV2<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(asset_type: u32)]
+pub struct InitializeVault<'info> {
+    #[account(
+        seeds = [b"bridge_v2"],
+        bump = bridge.bump,
+        has_one = authority @ FluxeError::Unauthorized,
+    )]
+    pub bridge: Account<'info, BridgeStateV2>,
+
+    #[account(
+        seeds = [b"asset_v2", asset_type.to_le_bytes().as_ref()],
+        bump = asset_config.bump,
+        constraint = asset_config.asset_type == asset_type @ FluxeError::InvalidAssetType,
+    )]
+    pub asset_config: Account<'info, AssetConfig>,
+
+    #[account(
+        init,
+        payer = authority,
+        seeds = [b"vault_v2", asset_type.to_le_bytes().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = bridge,
+    )]
+    pub vault: Account<'info, TokenAccount>,
+
+    #[account(
+        constraint = mint.key() == asset_config.mint @ FluxeError::MintMismatch,
+    )]
+    pub mint: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
 
@@ -1285,6 +1363,13 @@ pub struct AssetRegisteredV2 {
     pub mint: Pubkey,
     pub min_deposit: u64,
     pub max_deposit: u64,
+}
+
+#[event]
+pub struct VaultInitializedV2 {
+    pub asset_type: u32,
+    pub vault: Pubkey,
+    pub mint: Pubkey,
 }
 
 #[event]

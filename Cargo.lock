@@ -1855,6 +1855,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
+name = "e2e-rapidsnark-sp1"
+version = "0.1.0"
+dependencies = [
+ "ark-bn254 0.5.0",
+ "ark-ff 0.5.0",
+ "ark-r1cs-std",
+ "ark-relations",
+ "ark-serialize 0.5.0",
+ "fluxe-aggregation-lib",
+ "fluxe-circuits",
+ "fluxe-core",
+ "fluxe-rapidsnark",
+ "num-bigint 0.4.6",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "substrate-bn-succinct",
+ "tokio",
+]
+
+[[package]]
 name = "ecdsa"
 version = "0.16.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2485,6 +2507,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "fluxe-aggregation-lib"
+version = "0.1.0"
+dependencies = [
+ "ark-bn254 0.5.0",
+ "ark-ec 0.5.0",
+ "ark-ff 0.5.0",
+ "ark-groth16",
+ "ark-r1cs-std",
+ "ark-relations",
+ "ark-serialize 0.5.0",
+ "ark-snark",
+ "ark-std 0.5.0",
+ "hex",
+ "rand 0.8.5",
+ "serde",
+ "sha2 0.10.9",
+ "substrate-bn-succinct",
+]
+
+[[package]]
 name = "fluxe-api"
 version = "0.1.0"
 dependencies = [
@@ -2522,6 +2564,7 @@ dependencies = [
  "ark-std 0.5.0",
  "criterion",
  "fluxe-core",
+ "hex",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",
@@ -3595,6 +3638,9 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+dependencies = [
+ "spin 0.9.8",
+]
 
 [[package]]
 name = "lazycell"
@@ -4967,7 +5013,7 @@ dependencies = [
  "cc",
  "libc",
  "once_cell",
- "spin",
+ "spin 0.5.2",
  "untrusted 0.7.1",
  "web-sys",
  "winapi",
@@ -7737,10 +7783,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp1-lib"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a5729da1b05d56c01457e5ecabdc77f1cc941df23f2921163a2f325aec22428"
+dependencies = [
+ "bincode",
+ "serde",
+]
+
+[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "spin"
+version = "0.9.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "spinning_top"
@@ -8187,6 +8249,23 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.114",
+]
+
+[[package]]
+name = "substrate-bn-succinct"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "114c855c26ad0594c830129cb868552fb41415603a6133276c2ecdd9e5ef4255"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "cfg-if",
+ "crunchy",
+ "lazy_static",
+ "num-bigint 0.4.6",
+ "rand 0.8.5",
+ "rustc-hex",
+ "sp1-lib",
 ]
 
 [[package]]

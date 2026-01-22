@@ -123,6 +123,11 @@ impl StateRoots {
 }
 
 /// Batch input for the SP1 aggregation program
+///
+/// Note: Verifying keys are NOT included in the batch input.
+/// They are embedded at compile time in the SP1 program via `include_bytes!`.
+/// This provides stronger security guarantees - VKs cannot be tampered with
+/// without changing the SP1 program's ELF hash.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BatchInput {
     /// Batch identifier
@@ -139,10 +144,6 @@ pub struct BatchInput {
 
     /// State roots after this batch
     pub new_roots: StateRoots,
-
-    /// Verifying keys for each circuit type (indexed by TxType)
-    /// Each VK is in gnark format
-    pub verifying_keys: Vec<Vec<u8>>,
 
     /// Proofs to verify in this batch
     pub proofs: Vec<ProofEntry>,

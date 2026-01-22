@@ -46,6 +46,8 @@ pub enum WithdrawalFailureReason {
     InvalidProof,
     /// Chain temporarily unavailable
     ChainUnavailable,
+    /// Proof generation failed - exit receipt not in tree
+    ProofGenerationFailed,
     /// Unknown failure
     Unknown,
 }

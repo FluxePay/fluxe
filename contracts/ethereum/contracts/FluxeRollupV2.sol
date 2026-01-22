@@ -89,6 +89,9 @@ contract FluxeRollupV2 {
     /// @notice Mapping of batch ID to finalized state roots
     mapping(uint64 => StateRoots) public finalizedBatches;
 
+    /// @notice Mapping of batch ID to pending state roots (committed but not yet executed)
+    mapping(uint64 => StateRoots) internal pendingStateRoots;
+
     /// @notice Priority operations queue
     PriorityOperation[] public priorityQueue;
     uint64 public priorityQueueHead;
@@ -243,6 +246,9 @@ contract FluxeRollupV2 {
         for (uint256 i = 0; i < _newBatches.length; i++) {
             lastBatch = _commitOneBatch(lastBatch, _newBatches[i]);
             storedBatchHashes[lastBatch.batchId] = _hashStoredBatchInfo(lastBatch);
+
+            // Store pending state roots for later finalization during execute
+            pendingStateRoots[lastBatch.batchId] = _newBatches[i].newStateRoots;
 
             emit BatchCommitted(
                 lastBatch.batchId,
@@ -430,6 +436,13 @@ contract FluxeRollupV2 {
 
         // Store L2 logs root hash for merkle proof verification
         l2LogsRootHashes[_storedBatch.batchId] = _storedBatch.l2LogsTreeRoot;
+
+        // Finalize state roots - move from pending to finalized
+        StateRoots memory roots = pendingStateRoots[_storedBatch.batchId];
+        _storeStateRoots(_storedBatch.batchId, roots);
+
+        // Clear pending state roots to free storage
+        delete pendingStateRoots[_storedBatch.batchId];
 
         emit BatchExecuted(
             _storedBatch.batchId,

@@ -21,3 +21,6 @@ docs/DEPLOYMENT_ROADMAP.md
 # Commit
 Always commit after completing a major feature
 
+# Fluxe Mobile app
+fluxe-app/
+

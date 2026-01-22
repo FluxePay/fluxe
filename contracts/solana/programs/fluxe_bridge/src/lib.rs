@@ -4,8 +4,12 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 declare_id!("11111111111111111111111111111112");
 
 pub mod error;
+pub mod groth16;
 pub mod state;
 pub mod utils;
+
+// V2 bridge is available as fluxe_bridge_v2 program (separate entry point)
+// See lib_v2.rs for zkSync-style three-phase batch lifecycle
 
 use error::FluxeError;
 use state::*;
@@ -206,6 +210,9 @@ pub mod fluxe_bridge {
         // Validate state (read-only checks first)
         require!(!ctx.accounts.bridge.paused, FluxeError::BridgePaused);
         require!(!withdrawal_record.processed, FluxeError::AlreadyWithdrawn);
+
+        // Validate asset type is within bounds
+        require!(asset_type < MAX_ASSET_TYPES as u32, FluxeError::InvalidAssetType);
 
         // Verify exit receipt is in the finalized batch's exit tree
         require!(

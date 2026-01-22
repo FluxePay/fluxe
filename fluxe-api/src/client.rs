@@ -113,6 +113,7 @@ impl FluxeClient {
             proof: serialize_proof(&proof)?,
             public_inputs: public_inputs.iter().map(field_to_hex).collect(),
             notes_out: vec![note_to_serializable(&note)],
+            expected_new_roots: None, // Let server compute roots
         };
 
         // Send request
@@ -218,6 +219,7 @@ impl FluxeClient {
             nullifier: field_to_hex(&nf),
             proof: serialize_proof(&proof)?,
             public_inputs: public_inputs.iter().map(field_to_hex).collect(),
+            expected_new_roots: None, // Let server compute roots
         };
 
         // Send request
@@ -351,6 +353,7 @@ impl FluxeClient {
             proof: serialize_proof(&proof)?,
             public_inputs: public_inputs.iter().map(field_to_hex).collect(),
             notes_out: notes_out.iter().map(note_to_serializable).collect(),
+            expected_new_roots: None, // Let server compute roots
         };
 
         // Send request

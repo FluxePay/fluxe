@@ -308,8 +308,7 @@ impl SolanaRpcClient {
                     data_str,
                 ) {
                     // Check if this is a deposit event by discriminator
-                    if data.len() >= 8 {
-                        let discriminator: [u8; 8] = data[..8].try_into().unwrap();
+                    if let Ok(discriminator) = <[u8; 8]>::try_from(&data[..8.min(data.len())]) {
 
                         if discriminator == SOLANA_DEPOSIT_EVENT_DISCRIMINATOR {
                             // Parse the event data (skip discriminator)

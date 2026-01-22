@@ -145,18 +145,43 @@ impl ChainWithdrawalHandler {
 
                 // Generate Merkle proof for this exit receipt
                 let receipt_hash = withdrawal.exit_receipt.hash();
-                if let Some(proof) = exit_tree.get_proof(receipt_hash) {
-                    withdrawal.mark_ready(proof, finalized_at);
+                match exit_tree.get_proof(receipt_hash) {
+                    Some(proof) => {
+                        withdrawal.mark_ready(proof, finalized_at);
 
-                    // Emit event
-                    self.events.push(WithdrawalEvent::Ready {
-                        exit_hash: withdrawal.exit_hash,
-                        chain_id: self.chain_id,
-                        batch_id,
-                        timestamp: finalized_at,
-                    });
+                        // Emit event
+                        self.events.push(WithdrawalEvent::Ready {
+                            exit_hash: withdrawal.exit_hash,
+                            chain_id: self.chain_id,
+                            batch_id,
+                            timestamp: finalized_at,
+                        });
 
-                    processed.push(exit_hash);
+                        processed.push(exit_hash);
+                    }
+                    None => {
+                        // Proof generation failed - exit receipt not in tree
+                        tracing::error!(
+                            "Failed to generate Merkle proof for withdrawal {:?} on chain {} in batch {}. \
+                             Exit receipt hash {:?} not found in exit tree.",
+                            exit_hash,
+                            self.chain_id,
+                            batch_id,
+                            receipt_hash
+                        );
+
+                        // Mark as failed so user knows something went wrong
+                        let reason = WithdrawalFailureReason::ProofGenerationFailed;
+                        withdrawal.mark_failed(reason);
+
+                        // Emit failure event
+                        self.events.push(WithdrawalEvent::Failed {
+                            exit_hash: withdrawal.exit_hash,
+                            chain_id: self.chain_id,
+                            reason,
+                            timestamp: finalized_at,
+                        });
+                    }
                 }
             }
         }

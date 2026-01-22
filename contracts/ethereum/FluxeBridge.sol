@@ -205,15 +205,17 @@ contract FluxeBridge is ReentrancyGuard {
     /// @notice Withdraw tokens from FLUXE L2 using exit receipt proof
     /// @param assetType Asset type identifier
     /// @param amount Amount to withdraw
-    /// @param recipient Address to receive tokens
-    /// @param exitReceiptHash Hash of the exit receipt
+    /// @param recipient Address to receive tokens (must match the exit receipt beneficiary)
+    /// @param nullifier Nullifier from the burned note
+    /// @param nonce Exit receipt nonce for uniqueness
     /// @param batchId Batch ID containing the exit receipt
     /// @param merkleProof Merkle proof of exit receipt in exit tree
     function withdraw(
         uint32 assetType,
         uint256 amount,
         address recipient,
-        bytes32 exitReceiptHash,
+        bytes32 nullifier,
+        uint64 nonce,
         uint64 batchId,
         bytes32[] calldata merkleProof
     ) external nonReentrant whenNotPaused {
@@ -225,7 +227,17 @@ contract FluxeBridge is ReentrancyGuard {
         if (recipient == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
 
-        // Check not already processed
+        // Compute expected exit receipt hash
+        // Exit receipt format: keccak256(destinationChain || assetType || amount || nullifier || nonce)
+        bytes32 exitReceiptHash = keccak256(abi.encodePacked(
+            chainId,
+            assetType,
+            amount,
+            nullifier,
+            nonce
+        ));
+
+        // Check not already processed (prevents double-spend)
         if (processedWithdrawals[exitReceiptHash]) {
             revert WithdrawalAlreadyProcessed();
         }
@@ -239,13 +251,6 @@ contract FluxeBridge is ReentrancyGuard {
         if (computedRoot != roots.exitRoot) {
             revert ExitReceiptNotInBatch();
         }
-
-        // Verify exit receipt format matches expected
-        // Exit receipt format: keccak256(destinationChain || assetType || amount || nullifier || nonce)
-        // We reconstruct and verify the hash includes this chain as destination
-        bytes32 expectedPrefix = keccak256(abi.encodePacked(chainId, assetType, amount));
-        // Note: Full verification would require the nullifier and nonce, which are provided
-        // by the sequencer. For now, we trust the Merkle proof verification.
 
         // Check pool has sufficient balance
         if (poolBalances[assetType] < amount) {

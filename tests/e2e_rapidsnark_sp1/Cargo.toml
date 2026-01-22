@@ -1,0 +1,45 @@
+[package]
+name = "e2e-rapidsnark-sp1"
+version = "0.1.0"
+edition = "2021"
+description = "End-to-end integration test for FLUXE: rapidsnark proving + SP1 aggregation"
+publish = false
+
+[lib]
+name = "e2e_rapidsnark_sp1"
+path = "mod.rs"
+
+[[test]]
+name = "full_e2e_test"
+path = "full_e2e_test.rs"
+
+[dependencies]
+# Core dependencies from workspace
+ark-bn254.workspace = true
+ark-ff.workspace = true
+ark-serialize.workspace = true
+ark-relations.workspace = true
+ark-r1cs-std.workspace = true
+rand.workspace = true
+
+# Serialization from workspace
+serde.workspace = true
+serde_json.workspace = true
+
+# Hashing
+sha2 = "0.10"
+
+# FLUXE crates
+fluxe-core = { path = "../../fluxe-core" }
+fluxe-circuits = { path = "../../fluxe-circuits" }
+fluxe-rapidsnark = { path = "../../fluxe-rapidsnark" }
+fluxe-aggregation-lib = { path = "../../fluxe-aggregation/lib" }
+
+# For proof conversion
+num-bigint = "0.4"
+
+# BN254 pairing for Groth16 verification
+bn.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

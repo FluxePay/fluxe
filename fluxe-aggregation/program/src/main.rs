@@ -15,6 +15,8 @@
 //! - Uses BN254 pairing precompiles for efficient Groth16 verification
 //! - Each proof verification costs ~10M cycles with precompiles
 //! - Total cost: O(n * 10M) cycles for n proofs
+//! - **VKs are embedded at compile time** - they cannot be tampered with
+//!   and are cryptographically bound to the SP1 program's ELF hash
 
 #![no_main]
 sp1_zkvm::entrypoint!(main);
@@ -25,26 +27,50 @@ use fluxe_aggregation_lib::{
 };
 use sha2::{Sha256, Digest};
 
+// ============================================================================
+// EMBEDDED VERIFICATION KEYS
+// ============================================================================
+// These VKs are compiled into the SP1 program binary and cannot be changed
+// without recompiling. This provides strong security guarantees - the SP1
+// proof commits to the exact VKs used via the ELF hash.
+//
+// VK format: gnark binary (alpha || beta || gamma || delta || ic_len || ic[...])
+// Each G1 point is 64 bytes, each G2 point is 128 bytes, ic_len is 4 bytes BE
+//
+// To update VKs:
+// 1. Generate new circuits and VKs using the setup process
+// 2. Export VKs to gnark binary format
+// 3. Copy the .vk.bin files to fluxe-aggregation/program/vks/
+// 4. Rebuild the SP1 program
+// ============================================================================
+
+/// Mint circuit verification key (gnark binary format)
+static MINT_VK: &[u8] = include_bytes!("../vks/mint_vk.bin");
+
+/// Burn circuit verification key (gnark binary format)
+static BURN_VK: &[u8] = include_bytes!("../vks/burn_vk.bin");
+
+/// Transfer circuit verification key (gnark binary format)
+static TRANSFER_VK: &[u8] = include_bytes!("../vks/transfer_vk.bin");
+
+/// ObjectUpdate circuit verification key (gnark binary format)
+static OBJECT_UPDATE_VK: &[u8] = include_bytes!("../vks/object_update_vk.bin");
+
 fn main() {
     // Read the batch input from the host
     let batch: BatchInput = sp1_zkvm::io::read();
 
-    // Parse verifying keys (indexed by TxType)
-    // We expect 4 VKs: Mint, Burn, Transfer, ObjectUpdate
-    assert!(
-        batch.verifying_keys.len() >= 4,
-        "Missing verifying keys"
-    );
-
+    // Parse embedded verifying keys (indexed by TxType)
+    // VKs are embedded at compile time - no runtime loading needed
     let vks: [Groth16VerifyingKey; 4] = [
-        Groth16VerifyingKey::from_bytes(&batch.verifying_keys[0])
-            .expect("Invalid Mint VK"),
-        Groth16VerifyingKey::from_bytes(&batch.verifying_keys[1])
-            .expect("Invalid Burn VK"),
-        Groth16VerifyingKey::from_bytes(&batch.verifying_keys[2])
-            .expect("Invalid Transfer VK"),
-        Groth16VerifyingKey::from_bytes(&batch.verifying_keys[3])
-            .expect("Invalid ObjectUpdate VK"),
+        Groth16VerifyingKey::from_bytes(MINT_VK)
+            .expect("Invalid embedded Mint VK"),
+        Groth16VerifyingKey::from_bytes(BURN_VK)
+            .expect("Invalid embedded Burn VK"),
+        Groth16VerifyingKey::from_bytes(TRANSFER_VK)
+            .expect("Invalid embedded Transfer VK"),
+        Groth16VerifyingKey::from_bytes(OBJECT_UPDATE_VK)
+            .expect("Invalid embedded ObjectUpdate VK"),
     ];
 
     // Verify each Groth16 proof
@@ -116,8 +142,10 @@ fn main() {
     let old_roots_hash = batch.old_roots.hash();
     let new_roots_hash = batch.new_roots.hash();
 
-    // Compute VK hash (commitment to the circuit VKs used)
-    let vk_hash = compute_vk_hash(&batch.verifying_keys);
+    // Note: VK commitment is implicit in the SP1 program's ELF hash
+    // Since VKs are embedded at compile time via include_bytes!, any change
+    // to the VKs changes the ELF binary and thus the program's vkey.
+    // This provides cryptographic binding without explicit VK hashing.
 
     // Create the batch output
     let output = BatchOutput {
@@ -131,16 +159,4 @@ fn main() {
     // Commit the public outputs
     // These are what the on-chain verifier will check
     sp1_zkvm::io::commit(&output);
-    sp1_zkvm::io::commit(&vk_hash);
-}
-
-/// Compute a hash of all verifying keys
-/// This binds the proof to specific circuit VKs
-fn compute_vk_hash(vks: &[Vec<u8>]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    for vk in vks {
-        let vk_hash: [u8; 32] = Sha256::digest(vk).into();
-        hasher.update(&vk_hash);
-    }
-    hasher.finalize().into()
 }

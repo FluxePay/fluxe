@@ -289,7 +289,9 @@ contract FluxeBridgeTest is Test {
 
         // Since we can't easily set up valid Merkle proofs in this test,
         // we'll verify the basic flow works
+        bytes32 nullifier = bytes32(uint256(123));
+        uint64 nonce = 1;
         vm.expectRevert(); // Will revert due to invalid proof
-        bridge.withdraw(USDC_ASSET_TYPE, 100, recipient, exitHash, 0, proof);
+        bridge.withdraw(USDC_ASSET_TYPE, 100, recipient, nullifier, nonce, 0, proof);
     }
 }

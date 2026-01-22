@@ -337,7 +337,8 @@ impl DepositMonitor {
         // Get latest block with retries
         let latest_block = self.get_latest_block_with_retry(chain_id).await?;
 
-        let monitor = self.chains.get_mut(&chain_id).unwrap();
+        let monitor = self.chains.get_mut(&chain_id)
+            .ok_or(MonitorError::ChainNotFound(chain_id))?;
 
         // Check if there are new blocks to process
         if !monitor.state.has_new_blocks(latest_block) {
@@ -372,7 +373,8 @@ impl DepositMonitor {
         };
 
         // Update state
-        let monitor = self.chains.get_mut(&chain_id).unwrap();
+        let monitor = self.chains.get_mut(&chain_id)
+            .ok_or(MonitorError::ChainNotFound(chain_id))?;
         monitor.state.update_last_processed(to_block);
         monitor.consecutive_errors = 0;
         monitor.polling = false;

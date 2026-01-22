@@ -132,4 +132,10 @@ pub enum FluxeError {
     /// Priority operation already processed
     #[msg("Priority operation already processed")]
     PriorityOpAlreadyProcessed,
+
+    // ============ Groth16 Verification Errors ============
+
+    /// Groth16 proof verification failed
+    #[msg("Groth16 proof verification failed")]
+    Groth16ProofInvalid,
 }
