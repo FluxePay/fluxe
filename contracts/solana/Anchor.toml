@@ -1,0 +1,21 @@
+[features]
+seeds = true
+
+[programs.localnet]
+fluxe_bridge = "FLUXEBridgeXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+[programs.devnet]
+fluxe_bridge = "FLUXEBridgeXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+[programs.mainnet]
+fluxe_bridge = "FLUXEBridgeXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

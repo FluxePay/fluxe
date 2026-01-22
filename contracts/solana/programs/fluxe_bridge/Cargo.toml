@@ -1,0 +1,21 @@
+[package]
+name = "fluxe-bridge"
+version = "0.1.0"
+description = "FLUXE Bridge Program for Solana - handles deposits and withdrawals"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "fluxe_bridge"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = { version = "0.30.0", features = ["init-if-needed"] }
+anchor-spl = { version = "0.30.0" }
+solana-program = "1.18"
