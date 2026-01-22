@@ -1,5 +1,3 @@
-/target
-
 .DS_Store
 .vscode
 .idea
@@ -13,3 +11,8 @@ fluxe-rapidsnark/outputs/
 *_vkey.json
 *_proof.json
 *_public.json
+
+**/dist
+**/out
+**/cache
+**/target
