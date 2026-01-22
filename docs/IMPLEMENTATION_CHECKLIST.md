@@ -11,8 +11,8 @@
 - **Phase 1**: 100% Complete (12/12 tasks)
 - **Phase 2**: 75% Complete (9/12 tasks) - Deployments pending
 - **Phase 3**: 100% Complete (13/13 tasks)
-- **Phase 4**: 0% Complete (0/9 tasks)
-- **Overall**: 74% Complete (34/46 total tasks)
+- **Phase 4**: 22% Complete (2/9 tasks) - Deployment infrastructure ready
+- **Overall**: 78% Complete (36/46 total tasks)
 
 ## Test Status
 
@@ -345,11 +345,26 @@ Library tests (13 passing) work without SP1 toolchain.
 
 ---
 
-## PHASE 4: Testing & Deployment (3-4 weeks) - NOT STARTED
+## PHASE 4: Testing & Deployment (3-4 weeks) - IN PROGRESS
 
-### 4.1 Testnet Deployment ⏳
+### 4.1 Testnet Deployment ⏳ INFRASTRUCTURE READY
+
+- [x] Ethereum deployment scripts (Foundry)
+  - Status: Complete
+  - Files: `contracts/ethereum/script/Deploy.s.sol`, `DEPLOYMENT.md`
+  - Features: Deploy script, asset registration, verification
+  - Ready for Sepolia deployment
+
+- [x] Solana deployment guide (Anchor)
+  - Status: Complete
+  - File: `contracts/solana/DEPLOYMENT.md`
+  - Features: Program keypair generation, initialization guide
+  - Ready for Devnet deployment
 
 - [ ] Deploy to Sepolia + Solana Devnet
+  - Status: Pending - requires testnet ETH/SOL and RPC endpoints
+  - Prerequisites: Private key, Alchemy/Infura API key
+
 - [ ] End-to-end cross-chain testing
 - [ ] Performance benchmarking
 
