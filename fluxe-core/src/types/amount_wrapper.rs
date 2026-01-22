@@ -1,10 +1,12 @@
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 use ark_serialize::{SerializationError, Read, Write};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use ark_bn254::Fr as F;
 
 /// Wrapper for u128 amounts with ark_serialize support
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Amount(pub u128);
 
 impl Amount {
@@ -14,6 +16,11 @@ impl Amount {
 
     pub fn zero() -> Self {
         Self(0)
+    }
+
+    /// Check if the amount is zero
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
     }
 
     pub fn value(&self) -> u128 {

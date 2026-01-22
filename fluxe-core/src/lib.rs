@@ -1,3 +1,4 @@
+pub mod bridge;
 pub mod config;
 pub mod crypto;
 pub mod data_structures;
@@ -11,6 +12,7 @@ pub mod storage;
 pub mod types;
 pub mod utils;
 
+pub use bridge::*;
 pub use config::*;
 pub use crypto::*;
 pub use data_structures::*;
