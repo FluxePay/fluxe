@@ -802,6 +802,7 @@ mod tests {
             batch_id: 5,
             agg_proof: vec![],
             timestamp: 2000,
+            total_fees: crate::types::Amount::zero(),
         };
 
         let results = processor.process_finalized_batch(5, &header, &chain_exit_trees, 2000).unwrap();

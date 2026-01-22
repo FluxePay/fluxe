@@ -132,6 +132,8 @@ pub struct BlockHeader {
     pub batch_id: u64,
     pub agg_proof: Vec<u8>, // Placeholder for aggregated proof
     pub timestamp: Time,
+    /// Total fees collected in this block (per-chain aggregation happens in FeeCollector)
+    pub total_fees: Amount,
 }
 
 /// Collection of all Merkle roots

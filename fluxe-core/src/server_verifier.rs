@@ -376,6 +376,7 @@ impl ServerVerifier {
             batch_id,
             agg_proof: self.generate_aggregate_proof(chain_id)?,
             timestamp,
+            total_fees: Amount::zero(), // Fee tracking happens in FeeCollector
         };
 
         // Advance to next batch - get mutable reference
