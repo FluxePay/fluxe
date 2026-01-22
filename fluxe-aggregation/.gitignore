@@ -1,0 +1,14 @@
+# Build artifacts
+target/
+Cargo.lock
+
+# SP1 ELF binaries (generated at build time)
+elf/riscv32im-succinct-zkvm-elf
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store

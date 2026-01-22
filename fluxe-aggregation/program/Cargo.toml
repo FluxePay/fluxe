@@ -1,0 +1,23 @@
+[package]
+name = "fluxe-aggregation-program"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SP1 guest program for FLUXE batch state transition proof"
+
+[dependencies]
+# Shared types (includes Groth16 verifier)
+fluxe-aggregation-lib = { workspace = true, default-features = false }
+
+# SP1 zkVM runtime
+sp1-zkvm = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+bincode = { workspace = true }
+
+# Crypto
+sha2 = { workspace = true }
+
+# BN254 pairing (uses SP1 precompiles)
+bn = { workspace = true }

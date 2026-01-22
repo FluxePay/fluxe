@@ -1,0 +1,42 @@
+[workspace]
+members = ["lib", "program", "script"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+# Shared types library
+fluxe-aggregation-lib = { path = "./lib" }
+
+# SP1 SDK (for host/script)
+sp1-sdk = "4.0"
+
+# SP1 zkVM (for guest program)
+sp1-zkvm = "4.0"
+
+# SP1 build utilities
+sp1-build = "4.0"
+
+# BN254 pairing library (SP1-patched for precompiles)
+# This is the key dependency for Groth16 verification inside SP1
+bn = { version = "0.6.0-v5.0.0", package = "substrate-bn-succinct", default-features = false }
+
+# Serialization (no_std compatible)
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+bincode = { version = "1.3", default-features = false }
+
+# Crypto
+sha2 = { version = "0.10", default-features = false }
+
+# Error handling (std only)
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+
+# Hex encoding
+hex = { version = "0.4", default-features = false, features = ["alloc"] }

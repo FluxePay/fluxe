@@ -1,0 +1,30 @@
+[package]
+name = "fluxe-aggregation-lib"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared types for FLUXE proof aggregation"
+
+[dependencies]
+serde = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+# BN254 pairing for Groth16 verification (uses SP1 precompiles when in zkVM)
+bn = { workspace = true }
+
+[dev-dependencies]
+# For generating test proofs
+ark-bn254 = "0.5"
+ark-groth16 = "0.5"
+ark-std = "0.5"
+ark-ff = "0.5"
+ark-ec = "0.5"
+ark-relations = "0.5"
+ark-r1cs-std = "0.5"
+ark-serialize = "0.5"
+ark-snark = "0.5"
+rand = "0.8"
+
+[features]
+default = ["std"]
+std = []
