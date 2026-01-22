@@ -5,7 +5,7 @@
 /// 2. Export it to R1CS and WTNS files
 /// 3. Use the files with rapidsnark for proving
 
-use ark_bls12_381::Fr;
+use ark_bn254::Fr;
 use ark_ff::Field;
 use ark_r1cs_std::prelude::*;
 use ark_r1cs_std::fields::fp::FpVar;

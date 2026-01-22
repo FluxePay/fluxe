@@ -16,11 +16,14 @@
 
 ## Test Status
 
-- **fluxe-core**: 361 passing (including 48 bridge, 12 storage, 39 fee, 48 E2E, 20 monitoring tests)
+- **fluxe-core**: 255 passing (bridge, storage, fees, state management, sequencer, monitoring)
 - **fluxe-api**: 18 passing (1 pre-existing signature test failure)
+- **fluxe-rapidsnark**: 8 passing (serialization, prover, verifier)
 - **fluxe-aggregation-lib**: 13 passing (Groth16 verification)
 - **Ethereum Contracts (Foundry)**: 193 passing (enhanced with V2 contracts)
-- **Total**: 585 tests passing
+- **Total**: 487 tests passing
+
+**Note**: fluxe-circuits integration tests require circuit debugging after BN254 migration.
 
 ---
 
@@ -454,20 +457,25 @@ Library tests (13 passing) work without SP1 toolchain.
 - Files modified: 30+
 
 ### Test Coverage
-- GlobalStateManager: 16 tests
-- ChainConfig: 46 tests
-- ServerVerifier: 3 tests
-- FluxeClient/API: 19 tests
-- Middleware: 4 tests
-- Sequencer: 21 tests
-- Bridge (deposit/withdrawal): 48 tests
-- Storage: 12 tests
-- Fees: 39 tests
-- Cross-chain integration: 8 tests
-- E2E Integration: 48 tests (NEW)
-- Groth16 verification: 13 tests
-- Ethereum contracts: 30 tests
-- **Total**: 402+ tests
+- **fluxe-core**: 255 tests
+  - Bridge (deposit/withdrawal): 48 tests
+  - Storage: 12 tests
+  - Fees: 39 tests
+  - State management: 40+ tests
+  - Sequencer: 21 tests
+  - Monitoring: 20 tests
+  - Types/utils: 30+ tests
+- **fluxe-api**: 18 tests (middleware, client, API handlers)
+- **fluxe-rapidsnark**: 8 tests (serialization, integration)
+- **fluxe-aggregation-lib**: 13 tests (Groth16 verification)
+- **Ethereum Contracts (Foundry)**: 193 tests
+  - FluxeRollup: 13 tests
+  - FluxeBridge: 17 tests
+  - FluxeRollupV2: 46 tests
+  - FluxeMailbox: 41 tests
+  - Merkle library: 38 tests
+  - PriorityQueue: 38 tests
+- **Total**: 487 tests passing
 
 ### Benchmarks
 - Merkle tree operations: Insert, proof generation, verification

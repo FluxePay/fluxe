@@ -57,7 +57,7 @@ impl TestContext {
         let mut rng = ChaCha20Rng::seed_from_u64(42);
         
         // Generate setup keys for all circuits
-        let setup_manager = fluxe_circuits::setup::SetupManager::new();
+        let setup_manager = fluxe_circuits::setup::SetupManager::with_default_config();
         let mint_keys = setup_manager.generate_mint_setup(&mut rng).unwrap();
         let burn_keys = setup_manager.generate_burn_setup(&mut rng).unwrap();
         let transfer_keys = setup_manager.generate_transfer_setup(&mut rng).unwrap(); // Default 1-in/2-out
@@ -137,6 +137,7 @@ fn test_golden_scenario_mint_transfer_burn() {
     let cm = mint_note.commitment();
     let beneficiary_cm = poseidon_hash(&[F::from(0u64), cm]);  // Hash chain starting from 0
     let ingress = IngressReceipt::new(
+        1, // source_chain (Ethereum)
         asset_type,
         Amount::from(mint_value as u128),
         beneficiary_cm,
@@ -342,6 +343,7 @@ fn test_golden_scenario_mint_transfer_burn() {
     
     // Create exit receipt
     let exit_receipt = ExitReceipt::new(
+        1, // destination_chain (Ethereum)
         asset_type,
         Amount::from(burn_value as u128),
         bob_nf,

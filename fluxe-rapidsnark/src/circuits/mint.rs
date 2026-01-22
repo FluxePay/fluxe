@@ -17,17 +17,9 @@ impl RapidsnarkCircuit for MintCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fluxe_core::{
-        crypto::poseidon_hash,
-        data_structures::{IngressReceipt, Note},
-        merkle::{IncrementalTree, MerkleParams},
-        types::*,
-    };
-    use ark_bls12_381::Fr;
-    use ark_ff::Field;
 
     #[test]
-    #[ignore] // Requires actual tree setup
+    #[ignore] // Requires actual tree setup with proper circuit configuration
     fn test_mint_circuit_export() {
         // This is a placeholder test - actual test would require proper setup
         // See integration tests for full examples

@@ -8,8 +8,8 @@ authors.workspace = true
 fluxe-core = { path = "../fluxe-core" }
 fluxe-circuits = { path = "../fluxe-circuits" }
 
-# Arkworks dependencies (BLS12-381)
-ark-bls12-381 = { workspace = true }
+# Arkworks dependencies (BN254 - for Ethereum compatibility)
+ark-bn254 = { workspace = true }
 ark-ff = { workspace = true }
 ark-relations = { workspace = true }
 ark-std = { workspace = true }
@@ -29,3 +29,4 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
+ark-bn254 = { workspace = true }

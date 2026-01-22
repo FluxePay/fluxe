@@ -1,4 +1,4 @@
-use ark_bls12_381::Fr;
+use ark_bn254::Fr;
 use ark_ff::{PrimeField, BigInteger};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem};
 use r1cs_file::{FieldElement as R1csFE, Header, Constraint as R1csConstraint, Constraints, R1csFile, WireMap};
@@ -7,9 +7,9 @@ use std::fs::File;
 use std::path::Path;
 use crate::errors::{RapidsnarkError, Result};
 
-const FIELD_SIZE: usize = 32; // BLS12-381 Fr elements are 32 bytes
+const FIELD_SIZE: usize = 32; // BN254 Fr elements are 32 bytes
 
-/// Export an arkworks circuit (BLS12-381) to Circom-compatible R1CS and WTNS files
+/// Export an arkworks circuit (BN254) to Circom-compatible R1CS and WTNS files
 ///
 /// This function takes a constraint synthesizer circuit and exports it to the format
 /// used by Circom/SnarkJS, allowing proof generation with rapidsnark.
@@ -187,7 +187,7 @@ mod tests {
     }
 
     impl ConstraintSynthesizer<Fr> for TestCircuit {
-        fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
+        fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> std::result::Result<(), SynthesisError> {
             let a_var = FpVar::new_witness(cs.clone(), || Ok(self.a))?;
             let b_var = FpVar::new_witness(cs.clone(), || Ok(self.b))?;
             let c_var = FpVar::new_input(cs, || Ok(self.c))?;
