@@ -1,10 +1,11 @@
 use crate::{
     data_structures::{ExitReceipt, IngressReceipt, Note},
-    errors::{FluxeError, StateError},
+    errors::FluxeError,
     logging::PerfTimer,
-    state_manager::StateManager,
+    state_manager::GlobalStateManager,
     types::*,
 };
+use std::collections::HashMap;
 use ark_bn254::Fr as F;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_serialize::CanonicalSerialize;
@@ -171,18 +172,20 @@ fn parse_object_update_public_inputs(inputs: &[F]) -> Result<ObjectUpdatePublicI
 
 /// Server-side batch verifier implementing section 12.4 of the spec
 /// Verifies client proofs and deterministically reapplies Merkle operations
+///
+/// Updated for multi-chain support using GlobalStateManager
 pub struct ServerVerifier {
-    /// State manager for tracking roots and trees
-    state: StateManager,
-    
+    /// Global state manager for tracking roots and trees across all chains
+    state: GlobalStateManager,
+
     /// Verifying keys for different circuit types
     vk_mint: VerifyingKey<ark_bn254::Bn254>,
     vk_burn: VerifyingKey<ark_bn254::Bn254>,
     vk_transfer: VerifyingKey<ark_bn254::Bn254>,
     vk_object_update: VerifyingKey<ark_bn254::Bn254>,
-    
-    /// Pending transaction batch
-    pending_batch: TransactionBatch,
+
+    /// Pending transaction batches per chain
+    pending_batches: HashMap<ChainId, TransactionBatch>,
 }
 
 /// A batch of transactions to be processed together
@@ -202,6 +205,8 @@ pub struct VerifiedTransaction {
     pub old_roots: StateRoots,
     pub new_roots: StateRoots,
     pub transaction_data: TransactionData,
+    /// Chain ID for cross-chain transactions (Mint/Burn only)
+    pub chain_id: Option<ChainId>,
 }
 
 /// Specific transaction data for different types
@@ -231,8 +236,9 @@ pub enum TransactionData {
 }
 
 impl ServerVerifier {
+    /// Create a new ServerVerifier with GlobalStateManager
     pub fn new(
-        state: StateManager,
+        state: GlobalStateManager,
         vk_mint: VerifyingKey<ark_bn254::Bn254>,
         vk_burn: VerifyingKey<ark_bn254::Bn254>,
         vk_transfer: VerifyingKey<ark_bn254::Bn254>,
@@ -244,40 +250,85 @@ impl ServerVerifier {
             vk_burn,
             vk_transfer,
             vk_object_update,
-            pending_batch: TransactionBatch {
+            pending_batches: HashMap::new(),
+        }
+    }
+
+    /// Helper: Combine global and chain-specific roots into StateRoots
+    /// This maintains backward compatibility with existing proof verification
+    fn get_full_state_roots(&self, chain_id: ChainId) -> Result<StateRoots, FluxeError> {
+        let global_roots = self.state.get_global_roots();
+        let chain_roots = self.state.get_chain_roots(chain_id)
+            .ok_or_else(|| FluxeError::Other(format!("Chain {} not registered", chain_id)))?;
+
+        Ok(StateRoots {
+            cmt_root: global_roots.cmt_root,
+            nft_root: global_roots.nft_root,
+            obj_root: global_roots.obj_root,
+            cb_root: global_roots.cb_root,
+            ingress_root: chain_roots.ingress_root,
+            exit_root: chain_roots.exit_root,
+            sanctions_root: global_roots.sanctions_root,
+            pool_rules_root: global_roots.pool_rules_root,
+        })
+    }
+    
+    /// Add a transaction to the pending batch for a specific chain
+    ///
+    /// # Arguments
+    /// * `chain_id` - Chain ID for Mint/Burn transactions, ignored for Transfer/ObjectUpdate
+    /// * `tx` - The verified transaction to add
+    pub fn add_transaction(&mut self, chain_id: ChainId, tx: VerifiedTransaction) -> Result<(), FluxeError> {
+        // Verify the proof first
+        self.verify_transaction_proof(&tx, chain_id)?;
+
+        // Get or create pending batch for this chain
+        let batch = self.pending_batches.entry(chain_id).or_insert_with(|| {
+            TransactionBatch {
                 transactions: Vec::new(),
                 batch_id: 0,
                 timestamp: 0,
-            },
-        }
-    }
-    
-    /// Add a transaction to the pending batch
-    pub fn add_transaction(&mut self, tx: VerifiedTransaction) -> Result<(), FluxeError> {
-        // Verify the proof first
-        self.verify_transaction_proof(&tx)?;
-        
+            }
+        });
+
         // Add to pending batch
-        self.pending_batch.transactions.push(tx);
+        batch.transactions.push(tx);
         Ok(())
     }
     
-    /// Process the entire batch and produce a block
-    #[instrument(skip(self), fields(batch_id = %self.pending_batch.batch_id, tx_count = self.pending_batch.transactions.len()))]
-    pub fn process_batch(&mut self) -> Result<BlockHeader, FluxeError> {
-        info!("Processing batch {} with {} transactions", self.pending_batch.batch_id, self.pending_batch.transactions.len());
-        let _timer = PerfTimer::new(format!("batch_{}_processing", self.pending_batch.batch_id));
+    /// Process the entire batch for a specific chain and produce a block
+    ///
+    /// # Arguments
+    /// * `chain_id` - The chain ID for this batch
+    ///
+    /// # Returns
+    /// BlockHeader with state transitions
+    #[instrument(skip(self), fields(chain_id = chain_id))]
+    pub fn process_batch(&mut self, chain_id: ChainId) -> Result<BlockHeader, FluxeError> {
+        let batch = self.pending_batches.get(&chain_id)
+            .ok_or_else(|| FluxeError::Other(format!("No pending batch for chain {}", chain_id)))?;
 
-        if self.pending_batch.transactions.is_empty() {
-            warn!("Batch {} is empty", self.pending_batch.batch_id);
+        info!("Processing batch {} for chain {} with {} transactions",
+              batch.batch_id, chain_id, batch.transactions.len());
+        let _timer = PerfTimer::new(format!("batch_{}_chain_{}_processing", batch.batch_id, chain_id));
+
+        if batch.transactions.is_empty() {
+            warn!("Batch {} for chain {} is empty", batch.batch_id, chain_id);
             return Err(FluxeError::Other("No transactions in batch".to_string()));
         }
 
-        let prev_roots = self.state.get_roots();
-        debug!("Previous roots: CMT={:?}, NFT={:?}", prev_roots.cmt_root, prev_roots.nft_root);
-        
+        // Get previous roots (combining global + chain-specific)
+        let prev_roots = self.get_full_state_roots(chain_id)?;
+        debug!("Chain {} - Previous roots: CMT={:?}, NFT={:?}",
+               chain_id, prev_roots.cmt_root, prev_roots.nft_root);
+
+        // Clone transactions to avoid borrow checker issues
+        let batch_id = batch.batch_id;
+        let timestamp = batch.timestamp;
+        let transactions = batch.transactions.clone();
+
         // Verify each transaction's old roots match current state before processing
-        for (i, tx) in self.pending_batch.transactions.iter().enumerate() {
+        for (i, tx) in transactions.iter().enumerate() {
             if i == 0 {
                 // First transaction should match current state
                 if tx.old_roots != prev_roots {
@@ -287,49 +338,59 @@ impl ServerVerifier {
                 }
             }
         }
-        
+
         // Process transactions deterministically and verify each one's roots
         let mut intermediate_roots = Vec::new();
         intermediate_roots.push(prev_roots.clone());
-        
+
         // Process each transaction individually to track intermediate states
-        // Clone the transactions to avoid borrow checker issues
-        let transactions = self.pending_batch.transactions.clone();
         for tx in &transactions {
-            self.apply_single_transaction(tx)?;
-            intermediate_roots.push(self.state.get_roots());
+            self.apply_single_transaction(tx, chain_id)?;
+            let current_roots = self.get_full_state_roots(chain_id)?;
+            intermediate_roots.push(current_roots);
         }
-        
+
         // Verify that each transaction's declared new roots match the state after processing it
         for (i, _tx) in transactions.iter().enumerate() {
             let _expected_roots = &intermediate_roots[i + 1];
             // Only verify if transaction declares new roots (they might be optional)
             // For now we'll compute them deterministically
         }
-        
+
         // Final roots after all transactions
-        let new_roots = self.state.get_roots();
-        
+        let new_roots = self.get_full_state_roots(chain_id)?;
+
+        // CRITICAL: Verify supply invariants after batch processing
+        self.state.check_all_supply_invariants()
+            .map_err(|e| {
+                error!("Supply invariant violation after batch {}: {:?}", batch_id, e);
+                FluxeError::StateManagement(e)
+            })?;
+
+        debug!("Supply invariants verified for batch {}", batch_id);
+
         // Create block header
         let header = BlockHeader {
             prev_roots,
             new_roots,
-            batch_id: self.pending_batch.batch_id,
-            agg_proof: self.generate_aggregate_proof()?,
-            timestamp: self.pending_batch.timestamp,
+            batch_id,
+            agg_proof: self.generate_aggregate_proof(chain_id)?,
+            timestamp,
         };
-        
-        // Advance to next batch
-        self.pending_batch.batch_id += 1;
-        self.pending_batch.transactions.clear();
-        
+
+        // Advance to next batch - get mutable reference
+        if let Some(batch_mut) = self.pending_batches.get_mut(&chain_id) {
+            batch_mut.batch_id += 1;
+            batch_mut.transactions.clear();
+        }
+
         Ok(header)
     }
     
     /// Verify a single transaction's proof
-    #[instrument(skip(self, tx), fields(tx_type = ?tx.tx_type))]
-    fn verify_transaction_proof(&self, tx: &VerifiedTransaction) -> Result<(), FluxeError> {
-        trace!("Verifying {:?} transaction proof", tx.tx_type);
+    #[instrument(skip(self, tx), fields(tx_type = ?tx.tx_type, chain_id = chain_id))]
+    fn verify_transaction_proof(&self, tx: &VerifiedTransaction, chain_id: ChainId) -> Result<(), FluxeError> {
+        trace!("Verifying {:?} transaction proof for chain {}", tx.tx_type, chain_id);
         let _timer = PerfTimer::new(format!("verify_{:?}_proof", tx.tx_type));
 
         let vk = match tx.tx_type {
@@ -352,7 +413,29 @@ impl ServerVerifier {
 
         // Step 2: Parse public inputs and verify roots match server state
         // SECURITY CRITICAL: This prevents clients from proving things about a different Merkle forest
-        let current_state = self.state.get_roots();
+        // For Mint/Burn, we need chain-specific roots; for Transfer/ObjectUpdate, we use global roots
+        let current_state = match tx.tx_type {
+            TransactionType::Mint | TransactionType::Burn => {
+                // Need chain-specific ingress/exit roots
+                self.get_full_state_roots(chain_id)?
+            }
+            TransactionType::Transfer | TransactionType::ObjectUpdate => {
+                // Use a dummy chain_id or default to 0 for global-only operations
+                // These transactions don't use ingress/exit roots, so we can use any valid chain
+                // or construct StateRoots from global roots only
+                let global_roots = self.state.get_global_roots();
+                StateRoots {
+                    cmt_root: global_roots.cmt_root,
+                    nft_root: global_roots.nft_root,
+                    obj_root: global_roots.obj_root,
+                    cb_root: global_roots.cb_root,
+                    ingress_root: F::from(0), // Not used in Transfer/ObjectUpdate
+                    exit_root: F::from(0),    // Not used in Transfer/ObjectUpdate
+                    sanctions_root: global_roots.sanctions_root,
+                    pool_rules_root: global_roots.pool_rules_root,
+                }
+            }
+        };
 
         match tx.tx_type {
             TransactionType::Mint => {
@@ -466,84 +549,74 @@ impl ServerVerifier {
     }
     
     /// Apply a single transaction's state changes and verify new roots match proof
-    fn apply_single_transaction(&mut self, tx: &VerifiedTransaction) -> Result<(), FluxeError> {
-        // Apply the state changes
+    fn apply_single_transaction(&mut self, tx: &VerifiedTransaction, chain_id: ChainId) -> Result<(), FluxeError> {
+        // Apply the state changes using GlobalStateManager methods
         match &tx.transaction_data {
-            TransactionData::Mint { ingress_receipt, notes_out, asset_type, amount, .. } => {
-                // 1. Append ingress receipt
-                self.state.ingress_tree.append(ingress_receipt.hash());
+            TransactionData::Mint { ingress_receipt, notes_out, .. } => {
+                // Extract commitments from notes
+                let commitments: Vec<Commitment> = notes_out.iter()
+                    .map(|note| note.commitment())
+                    .collect();
 
-                // 2. Append output note commitments
-                for note in notes_out {
-                    self.state.cmt_tree.append(note.commitment());
-                }
-
-                // 3. Update supply
-                let supply = self.state.supply
-                    .entry(*asset_type)
-                    .or_insert(Amount::zero());
-                *supply = *supply + *amount;
+                // Use GlobalStateManager's process_mint
+                self.state.process_mint(chain_id, ingress_receipt, &commitments)
+                    .map_err(|e| FluxeError::StateManagement(e))?;
             }
-            TransactionData::Burn { nullifier, exit_receipt, asset_type, amount, .. } => {
-                // 1. Check and insert nullifier
-                if self.state.nft_tree.contains(nullifier) {
-                    return Err(FluxeError::StateManagement(StateError::DoubleSpend(format!("{:?}", nullifier))));
-                }
-                self.state.nft_tree.insert(*nullifier).map_err(|e| FluxeError::Other(e))?;
-
-                // 2. Append exit receipt
-                self.state.exit_tree.append(exit_receipt.hash());
-
-                // 3. Update supply
-                let supply = self.state.supply
-                    .entry(*asset_type)
-                    .or_insert(Amount::zero());
-                if *supply < *amount {
-                    return Err(FluxeError::Other("Insufficient balance for burn".to_string()));
-                }
-                *supply = *supply - *amount;
+            TransactionData::Burn { nullifier, exit_receipt, .. } => {
+                // Use GlobalStateManager's process_burn
+                self.state.process_burn(chain_id, exit_receipt, *nullifier)
+                    .map_err(|e| FluxeError::StateManagement(e))?;
             }
             TransactionData::Transfer { nullifiers, notes_out, .. } => {
-                // 1. Insert nullifiers (in order)
-                for &nf in nullifiers {
-                    if self.state.nft_tree.contains(&nf) {
-                        return Err(FluxeError::StateManagement(StateError::DoubleSpend(format!("{:?}", nf))));
-                    }
-                    self.state.nft_tree.insert(nf).map_err(|e| FluxeError::Other(e))?;
-                }
+                // Extract commitments from notes
+                let commitments: Vec<Commitment> = notes_out.iter()
+                    .map(|note| note.commitment())
+                    .collect();
 
-                // 2. Append output note commitments
-                for note in notes_out {
-                    self.state.cmt_tree.append(note.commitment());
-                }
+                // Use GlobalStateManager's process_transfer
+                self.state.process_transfer(nullifiers, &commitments)
+                    .map_err(|e| FluxeError::StateManagement(e))?;
             }
             TransactionData::ObjectUpdate { new_object_cm, callback_ops, .. } => {
-                // 1. Process callback operations
-                for op in callback_ops {
-                    match op {
-                        CallbackOperation::Add(invocation) => {
-                            self.state.cb_tree.insert(invocation.ticket).map_err(|e| FluxeError::Other(e))?;
-                        }
-                        CallbackOperation::Process(_ticket) => {
-                            // Mark as processed
-                        }
-                    }
-                }
+                // Extract callback invocation if there's an Add operation
+                let callback_invocation = callback_ops.iter()
+                    .find_map(|op| match op {
+                        CallbackOperation::Add(invocation) => Some(invocation),
+                        _ => None,
+                    });
 
-                // 2. Append new object commitment
-                self.state.obj_tree.append(*new_object_cm);
+                // Use GlobalStateManager's process_object_update
+                self.state.process_object_update(*new_object_cm, callback_invocation)
+                    .map_err(|e| FluxeError::StateManagement(e))?;
             }
         }
 
         // SECURITY CRITICAL: Verify new roots from proof match the computed state after replay
-        self.verify_new_roots_match_proof(tx)?;
+        self.verify_new_roots_match_proof(tx, chain_id)?;
 
         Ok(())
     }
 
     /// Verify that new roots from proof match the state after applying the transaction
-    fn verify_new_roots_match_proof(&self, tx: &VerifiedTransaction) -> Result<(), FluxeError> {
-        let computed_state = self.state.get_roots();
+    fn verify_new_roots_match_proof(&self, tx: &VerifiedTransaction, chain_id: ChainId) -> Result<(), FluxeError> {
+        let computed_state = match tx.tx_type {
+            TransactionType::Mint | TransactionType::Burn => {
+                self.get_full_state_roots(chain_id)?
+            }
+            TransactionType::Transfer | TransactionType::ObjectUpdate => {
+                let global_roots = self.state.get_global_roots();
+                StateRoots {
+                    cmt_root: global_roots.cmt_root,
+                    nft_root: global_roots.nft_root,
+                    obj_root: global_roots.obj_root,
+                    cb_root: global_roots.cb_root,
+                    ingress_root: F::from(0),
+                    exit_root: F::from(0),
+                    sanctions_root: global_roots.sanctions_root,
+                    pool_rules_root: global_roots.pool_rules_root,
+                }
+            }
+        };
 
         match tx.tx_type {
             TransactionType::Mint => {
@@ -627,63 +700,79 @@ impl ServerVerifier {
     }
     
     /// Generate aggregated proof for the entire batch
-    fn generate_aggregate_proof(&self) -> Result<Vec<u8>, FluxeError> {
+    fn generate_aggregate_proof(&self, chain_id: ChainId) -> Result<Vec<u8>, FluxeError> {
         // Placeholder for aggregated proof generation
         // In production, this would create a SNARK proof that all client proofs
         // were verified and state transitions were applied correctly
-        
+
+        let batch = self.pending_batches.get(&chain_id)
+            .ok_or_else(|| FluxeError::Other(format!("No pending batch for chain {}", chain_id)))?;
+
         let mut proof_data = Vec::new();
-        
+
+        // Include chain ID
+        proof_data.extend_from_slice(&chain_id.to_le_bytes());
+
         // Include batch metadata
-        proof_data.extend_from_slice(&self.pending_batch.batch_id.to_le_bytes());
-        proof_data.extend_from_slice(&self.pending_batch.timestamp.to_le_bytes());
-        proof_data.extend_from_slice(&(self.pending_batch.transactions.len() as u32).to_le_bytes());
-        
+        proof_data.extend_from_slice(&batch.batch_id.to_le_bytes());
+        proof_data.extend_from_slice(&batch.timestamp.to_le_bytes());
+        proof_data.extend_from_slice(&(batch.transactions.len() as u32).to_le_bytes());
+
         // Include hash of all transaction proofs
         let mut tx_hash = F::from(0);
-        for tx in &self.pending_batch.transactions {
+        for tx in &batch.transactions {
             // Simplified: hash the proof bytes
             tx_hash = crate::crypto::poseidon_hash(&[
                 tx_hash,
                 F::from(tx.public_inputs.len() as u64),
             ]);
         }
-        
+
         let mut tx_hash_bytes = Vec::new();
         tx_hash.serialize_compressed(&mut tx_hash_bytes)
             .map_err(|e| FluxeError::Serialization(e))?;
         proof_data.extend(tx_hash_bytes);
-        
+
         Ok(proof_data)
     }
     
-    /// Get current state roots
-    pub fn get_current_roots(&self) -> StateRoots {
-        self.state.get_roots()
+    /// Get current global state roots
+    pub fn get_global_roots(&self) -> GlobalRoots {
+        self.state.get_global_roots()
     }
-    
+
+    /// Get current state roots for a specific chain (combines global + chain-specific)
+    pub fn get_current_roots(&self, chain_id: ChainId) -> Result<StateRoots, FluxeError> {
+        self.get_full_state_roots(chain_id)
+    }
+
+    /// Get chain-specific roots
+    pub fn get_chain_roots(&self, chain_id: ChainId) -> Option<ChainStateRoots> {
+        self.state.get_chain_roots(chain_id)
+    }
+
     /// Get supply for an asset
     pub fn get_supply(&self, asset_type: AssetType) -> Amount {
         self.state.get_supply(asset_type)
     }
-    
+
     /// Check if address is sanctioned
     pub fn is_sanctioned(&self, _address: &F) -> bool {
         // In a real implementation, this would check against the sanctions tree
         // For now, return false (not sanctioned)
         false
     }
-    
+
     /// Get membership proof for a commitment
     pub fn get_commitment_proof(&self, cm: &F) -> Option<crate::merkle::MerklePath> {
-        self.state.cmt_tree.get_proof(*cm)
+        self.state.get_commitment_proof(*cm)
     }
-    
+
     /// Check if a nullifier exists
     pub fn nullifier_exists(&self, nf: &F) -> bool {
-        self.state.nft_tree.contains(nf)
+        self.state.nullifier_exists(*nf)
     }
-    
+
     /// Get membership proof for a nullifier
     pub fn get_nullifier_membership_proof(&self, _nf: &F) -> Option<crate::merkle::MerklePath> {
         // For sorted tree, we would need to track the index when the nullifier was inserted
@@ -691,15 +780,26 @@ impl ServerVerifier {
         // This would require enhancing SortedTree to maintain a key->index mapping
         None
     }
-    
+
     /// Get non-membership proof for a nullifier
-    pub fn get_nullifier_nonmembership_proof(&self, nf: &F) -> Result<crate::merkle::RangePath, String> {
-        self.state.nft_tree.prove_non_membership(*nf)
+    pub fn get_nullifier_nonmembership_proof(&self, nf: &F) -> Option<crate::state_manager::global::NonMembershipProof> {
+        self.state.get_nullifier_non_membership_proof(*nf)
     }
-    
+
     /// Get membership proof for an object
     pub fn get_object_proof(&self, obj_cm: &F) -> Option<crate::merkle::MerklePath> {
         self.state.obj_tree.get_proof(*obj_cm)
+    }
+
+    /// Register a new chain
+    pub fn register_chain(&mut self, chain_id: ChainId, chain_type: ChainType) -> Result<(), FluxeError> {
+        self.state.register_chain(chain_id, chain_type)
+            .map_err(|e| FluxeError::StateManagement(e))
+    }
+
+    /// Get list of registered chains
+    pub fn get_registered_chains(&self) -> Vec<ChainId> {
+        self.state.get_registered_chains()
     }
 }
 
@@ -740,6 +840,7 @@ impl TransactionBuilder {
         proof: Proof<ark_bn254::Bn254>,
         public_inputs: Vec<F>,
         transaction_data: TransactionData,
+        chain_id: Option<ChainId>,
     ) -> VerifiedTransaction {
         VerifiedTransaction {
             tx_type: self.tx_type,
@@ -748,6 +849,7 @@ impl TransactionBuilder {
             old_roots: self.old_roots,
             new_roots: self.new_roots,
             transaction_data,
+            chain_id,
         }
     }
 }
@@ -787,23 +889,24 @@ mod tests {
 
     #[test]
     fn test_server_verifier_creation() {
-        let state = StateManager::new(32);
+        let state = GlobalStateManager::new(32);
         let (vk_mint, vk_burn, vk_transfer, vk_object_update) = create_mock_verifying_keys();
-        
+
         let verifier = ServerVerifier::new(
             state,
             vk_mint,
-            vk_burn, 
+            vk_burn,
             vk_transfer,
             vk_object_update,
         );
-        
-        assert_eq!(verifier.pending_batch.transactions.len(), 0);
+
+        assert_eq!(verifier.pending_batches.len(), 0);
+        assert_eq!(verifier.get_registered_chains().len(), 0);
     }
 
     #[test]
-    fn test_supply_accounting() {
-        let state = StateManager::new(32);
+    fn test_multi_chain_registration() {
+        let state = GlobalStateManager::new(32);
         let (vk_mint, vk_burn, vk_transfer, vk_object_update) = create_mock_verifying_keys();
         let mut verifier = ServerVerifier::new(
             state,
@@ -812,15 +915,63 @@ mod tests {
             vk_transfer,
             vk_object_update,
         );
-        
+
+        // Register two chains
+        verifier.register_chain(1, ChainType::EVM).unwrap();
+        verifier.register_chain(2, ChainType::SVM).unwrap();
+
+        let chains = verifier.get_registered_chains();
+        assert_eq!(chains.len(), 2);
+        assert!(chains.contains(&1));
+        assert!(chains.contains(&2));
+    }
+
+    #[test]
+    fn test_supply_accounting() {
+        use ark_ff::UniformRand;
+
+        let mut state = GlobalStateManager::new(32);
+        state.register_chain(1, ChainType::EVM).unwrap();
+
+        let (vk_mint, vk_burn, vk_transfer, vk_object_update) = create_mock_verifying_keys();
+        let mut verifier = ServerVerifier::new(
+            state,
+            vk_mint,
+            vk_burn,
+            vk_transfer,
+            vk_object_update,
+        );
+
+        let mut rng = thread_rng();
+
         // Test mint increases supply
-        let supply = verifier.state.supply.entry(1).or_insert(Amount::zero());
-        *supply = *supply + Amount::from(1000u64);
+        let ingress = IngressReceipt {
+            source_chain: 1,
+            asset_type: 1,
+            amount: Amount::from(1000u64),
+            beneficiary_cm: F::rand(&mut rng),
+            nonce: 1,
+            aux: F::from(0),
+        };
+
+        verifier.state.process_mint(1, &ingress, &[F::rand(&mut rng)]).unwrap();
         assert_eq!(verifier.get_supply(1), Amount::from(1000u64));
-        
+
         // Test burn decreases supply
-        let supply = verifier.state.supply.entry(1).or_insert(Amount::zero());
-        *supply = *supply - Amount::from(300u64);
+        let nullifier = F::rand(&mut rng);
+        let exit = ExitReceipt {
+            destination_chain: 1,
+            asset_type: 1,
+            amount: Amount::from(300u64),
+            burned_nf: nullifier,
+            nonce: 2,
+            aux: F::from(0),
+        };
+
+        verifier.state.process_burn(1, &exit, nullifier).unwrap();
         assert_eq!(verifier.get_supply(1), Amount::from(700u64));
+
+        // Verify supply invariants hold
+        verifier.state.check_supply_invariant(1).unwrap();
     }
 }

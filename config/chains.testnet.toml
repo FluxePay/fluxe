@@ -1,0 +1,94 @@
+# FLUXE Multi-Chain Configuration - Testnet
+# This file configures the supported blockchain networks for FLUXE L2 testing
+
+# Default chain for operations that don't specify a chain
+default_chain = 11155111
+
+# Ethereum Sepolia Testnet Configuration
+[chains.sepolia]
+chain_id = 11155111
+chain_type = "EVM"
+name = "Sepolia Testnet"
+rpc_endpoint = "https://eth-sepolia.g.alchemy.com/v2/YOUR_ALCHEMY_KEY"
+ws_endpoint = "wss://eth-sepolia.g.alchemy.com/v2/YOUR_ALCHEMY_KEY"
+bridge_address = "0x0000000000000000000000000000000000000000"  # TODO: Deploy bridge contract
+verifier_address = "0x0000000000000000000000000000000000000000"  # TODO: Deploy verifier contract
+block_time_ms = 12000
+finality_blocks = 12  # Lower finality for testnet
+max_batch_size = 50
+base_fee = 100000  # 0.1 USDC (6 decimals) - lower for testing
+enabled = true
+
+# USDC on Sepolia (test token)
+[[chains.sepolia.assets]]
+asset_type = 1
+name = "USDC"
+token_address = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"  # Sepolia USDC
+decimals = 6
+min_deposit = 100000  # 0.1 USDC - lower minimum for testing
+max_deposit = 100000000000  # 100,000 USDC
+enabled = true
+
+# USDT on Sepolia (test token)
+[[chains.sepolia.assets]]
+asset_type = 2
+name = "USDT"
+token_address = "0x7169D38820dfd117C3FA1f22a697dBA58d90BA06"  # Sepolia USDT (example)
+decimals = 6
+min_deposit = 100000  # 0.1 USDT
+max_deposit = 100000000000  # 100,000 USDT
+enabled = true
+
+# DAI on Sepolia (test token)
+[[chains.sepolia.assets]]
+asset_type = 3
+name = "DAI"
+token_address = "0x68194a729C2450ad26072b3D33ADaCbcef39D574"  # Sepolia DAI (example)
+decimals = 18
+min_deposit = 100000000000000000  # 0.1 DAI
+max_deposit = 100000000000000000000000  # 100,000 DAI
+enabled = true
+
+# Solana Devnet Configuration
+[chains.solana-devnet]
+chain_id = 901
+chain_type = "SVM"
+name = "Solana Devnet"
+rpc_endpoint = "https://api.devnet.solana.com"
+ws_endpoint = "wss://api.devnet.solana.com"
+bridge_address = "11111111111111111111111111111111"  # TODO: Deploy Solana program
+block_time_ms = 400
+finality_blocks = 12  # Lower finality for devnet
+max_batch_size = 50
+base_fee = 1000  # 0.001 USDC (6 decimals) - lower for testing
+enabled = true
+
+# USDC on Solana Devnet (test token)
+[[chains.solana-devnet.assets]]
+asset_type = 1
+name = "USDC"
+token_address = "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr"  # Devnet USDC
+decimals = 6
+min_deposit = 100000  # 0.1 USDC
+max_deposit = 100000000000  # 100,000 USDC
+enabled = true
+
+# USDT on Solana Devnet (test token)
+[[chains.solana-devnet.assets]]
+asset_type = 2
+name = "USDT"
+token_address = "EJwZgeZrdC8TXTQbQBoL6bfuAnFUUy1PVCMB4DYPzVaS"  # Devnet USDT (example)
+decimals = 6
+min_deposit = 100000  # 0.1 USDT
+max_deposit = 100000000000  # 100,000 USDT
+enabled = true
+
+# SOL (wrapped) on Solana Devnet
+[[chains.solana-devnet.assets]]
+asset_type = 4
+name = "SOL"
+token_address = "So11111111111111111111111111111111111111112"
+decimals = 9
+min_deposit = 1000000  # 0.001 SOL - lower for testing
+max_deposit = 10000000000  # 10 SOL
+enabled = true

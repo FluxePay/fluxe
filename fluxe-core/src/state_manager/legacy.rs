@@ -1,7 +1,8 @@
 use crate::crypto::poseidon_hash;
 use crate::data_structures::{IngressReceipt, ExitReceipt, CallbackInvocation};
 use crate::errors::StateError;
-use crate::merkle::{IncrementalTree, SortedTree, MerklePath, TreeParams, SortedLeaf};
+use crate::merkle::{IncrementalTree, SortedTree, MerklePath, TreeParams};
+use crate::state_manager::NonMembershipProof;
 use crate::types::{*, StateRoots};
 use ark_bn254::Fr as F;
 use ark_ff::Zero;
@@ -286,17 +287,6 @@ pub enum StateOperation {
 
 
 
-/// Non-membership proof for nullifiers
-#[derive(Clone, Debug)]
-pub struct NonMembershipProof {
-    /// The leaf with key less than target
-    pub low_leaf: SortedLeaf,
-    /// Merkle path for the low leaf
-    pub low_path: MerklePath,
-}
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,6 +299,7 @@ mod tests {
         let mut rng = thread_rng();
         
         let receipt = IngressReceipt {
+            source_chain: 1,
             asset_type: 1,
             amount: Amount::from(1000u64),
             beneficiary_cm: F::rand(&mut rng),

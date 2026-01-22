@@ -334,7 +334,7 @@ mod tests {
         // The beneficiary_cm should be a hash chain of all output commitments
         let cm = note.commitment();
         let beneficiary_cm = poseidon_hash(&[F::from(0u64), cm]);  // Hash chain starting from 0
-        let ingress = IngressReceipt::new(1, Amount::from(value as u128), beneficiary_cm, 1);
+        let ingress = IngressReceipt::new(1, 1, Amount::from(value as u128), beneficiary_cm, 1);
         
         // Create proper Merkle trees
         let mut cmt_tree = IncrementalTree::new(16); // 16 levels

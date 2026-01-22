@@ -7,25 +7,29 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 /// Ingress receipt for deposits/mints
 #[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct IngressReceipt {
+    /// Chain ID where the deposit occurred (critical for preventing cross-chain replay attacks)
+    pub source_chain: ChainId,
+
     /// Asset type being minted
     pub asset_type: AssetType,
-    
+
     /// Amount being minted
     pub amount: Amount,
-    
+
     /// Commitment(s) to notes minted in response
     pub beneficiary_cm: F,
-    
+
     /// Nonce for uniqueness
     pub nonce: u64,
-    
+
     /// Auxiliary data binding to external deposit reference
     pub aux: F,
 }
 
 impl IngressReceipt {
-    pub fn new(asset_type: AssetType, amount: Amount, beneficiary_cm: F, nonce: u64) -> Self {
+    pub fn new(source_chain: ChainId, asset_type: AssetType, amount: Amount, beneficiary_cm: F, nonce: u64) -> Self {
         Self {
+            source_chain,
             asset_type,
             amount,
             beneficiary_cm,
@@ -35,8 +39,10 @@ impl IngressReceipt {
     }
 
     /// Compute hash of this receipt
+    /// Note: source_chain is placed first to prevent cross-chain replay attacks
     pub fn hash(&self) -> F {
         poseidon_hash(&[
+            F::from(self.source_chain as u64),
             F::from(self.asset_type as u64),
             self.amount.to_field(),
             self.beneficiary_cm,
@@ -54,25 +60,29 @@ impl IngressReceipt {
 /// Exit receipt for withdrawals/burns
 #[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct ExitReceipt {
+    /// Chain ID where the withdrawal will be processed (critical for preventing cross-chain replay attacks)
+    pub destination_chain: ChainId,
+
     /// Asset type being burned
     pub asset_type: AssetType,
-    
+
     /// Amount being burned
     pub amount: Amount,
-    
+
     /// Nullifier proving the burn of an input note
     pub burned_nf: Nullifier,
-    
+
     /// Nonce for uniqueness
     pub nonce: u64,
-    
+
     /// Auxiliary data binding to external withdrawal reference
     pub aux: F,
 }
 
 impl ExitReceipt {
-    pub fn new(asset_type: AssetType, amount: Amount, burned_nf: Nullifier, nonce: u64) -> Self {
+    pub fn new(destination_chain: ChainId, asset_type: AssetType, amount: Amount, burned_nf: Nullifier, nonce: u64) -> Self {
         Self {
+            destination_chain,
             asset_type,
             amount,
             burned_nf,
@@ -82,8 +92,10 @@ impl ExitReceipt {
     }
 
     /// Compute hash of this receipt
+    /// Note: destination_chain is placed first to prevent cross-chain replay attacks
     pub fn hash(&self) -> F {
         poseidon_hash(&[
+            F::from(self.destination_chain as u64),
             F::from(self.asset_type as u64),
             self.amount.to_field(),
             self.burned_nf,
@@ -254,8 +266,9 @@ mod tests {
     fn test_ingress_receipt() {
         let mut rng = thread_rng();
         let beneficiary = F::rand(&mut rng);
-        
-        let receipt = IngressReceipt::new(1, Amount::from(1000u128), beneficiary, 123);
+
+        let source_chain = 1; // Chain ID 1 (e.g., Ethereum)
+        let receipt = IngressReceipt::new(source_chain, 1, Amount::from(1000u128), beneficiary, 123);
         let hash1 = receipt.hash();
         let hash2 = receipt.hash();
         assert_eq!(hash1, hash2); // Hash should be deterministic
@@ -265,8 +278,9 @@ mod tests {
     fn test_exit_receipt() {
         let mut rng = thread_rng();
         let nullifier = F::rand(&mut rng);
-        
-        let receipt = ExitReceipt::new(1, Amount::from(500u128), nullifier, 456);
+
+        let destination_chain = 1; // Chain ID 1 (e.g., Ethereum)
+        let receipt = ExitReceipt::new(destination_chain, 1, Amount::from(500u128), nullifier, 456);
         let hash1 = receipt.hash();
         let hash2 = receipt.hash();
         assert_eq!(hash1, hash2);
@@ -276,14 +290,15 @@ mod tests {
     fn test_receipt_bundle() {
         let mut rng = thread_rng();
         let mut bundle = ReceiptBundle::new(1, 1000);
-        
+
+        let chain_id = 1; // Chain ID 1
         // Add some receipts
-        let ingress = IngressReceipt::new(1, Amount::from(1000u128), F::rand(&mut rng), 1);
-        let exit = ExitReceipt::new(1, Amount::from(300u128), F::rand(&mut rng), 2);
-        
+        let ingress = IngressReceipt::new(chain_id, 1, Amount::from(1000u128), F::rand(&mut rng), 1);
+        let exit = ExitReceipt::new(chain_id, 1, Amount::from(300u128), F::rand(&mut rng), 2);
+
         bundle.add_ingress(ingress);
         bundle.add_exit(exit);
-        
+
         // Check net supply change
         let net = bundle.net_supply_change(1);
         assert_eq!(net, 700); // 1000 minted - 300 burned
@@ -293,14 +308,36 @@ mod tests {
     fn test_attestation_receipt() {
         let mut rng = thread_rng();
         let user_cm = F::rand(&mut rng);
-        
+
         let attestation = AttestationReceipt::new(
             user_cm,
             AttestationType::KYCComplete { level: 2 },
             1000,
         );
-        
+
         let hash = attestation.hash();
         assert_ne!(hash, F::from(0));
+    }
+
+    #[test]
+    fn test_cross_chain_replay_protection() {
+        let mut rng = thread_rng();
+        let beneficiary = F::rand(&mut rng);
+
+        // Create identical receipts but for different chains
+        let chain1_receipt = IngressReceipt::new(1, 1, Amount::from(1000u128), beneficiary, 123);
+        let chain2_receipt = IngressReceipt::new(2, 1, Amount::from(1000u128), beneficiary, 123);
+
+        // Hashes MUST be different to prevent replay attacks across chains
+        assert_ne!(chain1_receipt.hash(), chain2_receipt.hash(),
+            "Receipts from different chains must have different hashes to prevent replay attacks");
+
+        // Same test for exit receipts
+        let nullifier = F::rand(&mut rng);
+        let exit1 = ExitReceipt::new(1, 1, Amount::from(500u128), nullifier, 456);
+        let exit2 = ExitReceipt::new(2, 1, Amount::from(500u128), nullifier, 456);
+
+        assert_ne!(exit1.hash(), exit2.hash(),
+            "Exit receipts for different chains must have different hashes");
     }
 }

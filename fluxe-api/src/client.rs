@@ -80,6 +80,7 @@ impl FluxeClient {
         let cm = note.commitment();
         let beneficiary_cm = poseidon_hash(&[F::from(0u64), cm]);
         let ingress = IngressReceipt::new(
+            1, // source_chain - default to chain 1
             asset_type,
             Amount::from(amount as u128),
             beneficiary_cm,
@@ -101,8 +102,9 @@ impl FluxeClient {
         // Generate proof
         let mut rng = rand::thread_rng();
         let proof = Groth16::<ark_bn254::Bn254>::prove(proving_key, circuit.clone(), &mut rng)?;
-        // Get public inputs from circuit (would implement trait)
-        let public_inputs = vec![];  // TODO: implement
+        // Get public inputs from circuit using FluxeCircuit trait
+        use fluxe_circuits::circuits::FluxeCircuit;
+        let public_inputs = circuit.public_inputs();
 
         // Prepare request
         let request = SubmitMintRequest {
@@ -148,6 +150,7 @@ impl FluxeClient {
 
         // Create exit receipt
         let exit_receipt = ExitReceipt::new(
+            1, // destination_chain - default to chain 1
             note.asset_type,
             Amount::from(value as u128),
             nf,
@@ -204,8 +207,9 @@ impl FluxeClient {
         // Generate proof
         let mut rng = rand::thread_rng();
         let proof = Groth16::<ark_bn254::Bn254>::prove(proving_key, circuit.clone(), &mut rng)?;
-        // Get public inputs from circuit (would implement trait)
-        let public_inputs = vec![];  // TODO: implement
+        // Get public inputs from circuit using FluxeCircuit trait
+        use fluxe_circuits::circuits::FluxeCircuit;
+        let public_inputs = circuit.public_inputs();
 
         // Prepare request
         let request = SubmitBurnRequest {
@@ -337,8 +341,9 @@ impl FluxeClient {
         // Generate proof
         let mut rng = rand::thread_rng();
         let proof = Groth16::<ark_bn254::Bn254>::prove(proving_key, circuit.clone(), &mut rng)?;
-        // Get public inputs from circuit (would implement trait)
-        let public_inputs = vec![];  // TODO: implement
+        // Get public inputs from circuit using FluxeCircuit trait
+        use fluxe_circuits::circuits::FluxeCircuit;
+        let public_inputs = circuit.public_inputs();
 
         // Prepare request
         let request = SubmitTransferRequest {

@@ -33,6 +33,10 @@ pub enum FluxeError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
+    // Configuration errors
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+
     // Generic errors
     #[error("{0}")]
     Other(String),

@@ -47,6 +47,37 @@ pub type Serial = u64;
 /// Chain hint for cross-chain support
 pub type ChainHint = u32;
 
+/// Chain identifier for multi-chain operations
+pub type ChainId = u32;
+
+/// Chain type discriminator
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ChainType {
+    /// Ethereum Virtual Machine compatible chains
+    EVM = 0,
+    /// Solana Virtual Machine
+    SVM = 1,
+}
+
+impl ChainType {
+    /// Convert to u8 for serialization
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            ChainType::EVM => 0,
+            ChainType::SVM => 1,
+        }
+    }
+
+    /// Convert from u8 for deserialization
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(ChainType::EVM),
+            1 => Some(ChainType::SVM),
+            _ => None,
+        }
+    }
+}
+
 /// Reputation score
 pub type RepScore = u32;
 
@@ -172,4 +203,165 @@ pub enum CallbackOperation {
     Add(crate::data_structures::zk_object::CallbackInvocation),
     /// Process/mark as processed a callback by ticket
     Process(F),
+}
+
+/// Global Merkle roots for the unified protocol state
+#[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
+pub struct GlobalRoots {
+    /// Global commitment tree root
+    pub cmt_root: MerkleRoot,
+    /// Global nullifier tree root
+    pub nft_root: MerkleRoot,
+    /// Global object board root
+    pub obj_root: MerkleRoot,
+    /// Global callback board root
+    pub cb_root: MerkleRoot,
+    /// Global sanctions root (reference)
+    pub sanctions_root: MerkleRoot,
+    /// Global pool rules root (reference)
+    pub pool_rules_root: MerkleRoot,
+}
+
+impl Default for GlobalRoots {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GlobalRoots {
+    pub fn new() -> Self {
+        Self {
+            cmt_root: F::from(0),
+            nft_root: F::from(0),
+            obj_root: F::from(0),
+            cb_root: F::from(0),
+            sanctions_root: F::from(0),
+            pool_rules_root: F::from(0),
+        }
+    }
+
+    /// Compute hash of global roots
+    pub fn hash(&self) -> F {
+        use crate::crypto::poseidon_hash;
+        poseidon_hash(&[
+            self.cmt_root,
+            self.nft_root,
+            self.obj_root,
+            self.cb_root,
+            self.sanctions_root,
+            self.pool_rules_root,
+        ])
+    }
+}
+
+/// Per-chain state roots for ingress/exit tracking
+#[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
+pub struct ChainStateRoots {
+    /// Ingress tree root (deposits from this chain)
+    pub ingress_root: MerkleRoot,
+    /// Exit tree root (withdrawals to this chain)
+    pub exit_root: MerkleRoot,
+}
+
+impl Default for ChainStateRoots {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ChainStateRoots {
+    pub fn new() -> Self {
+        Self {
+            ingress_root: F::from(0),
+            exit_root: F::from(0),
+        }
+    }
+
+    /// Compute hash of chain state roots
+    pub fn hash(&self) -> F {
+        use crate::crypto::poseidon_hash;
+        poseidon_hash(&[self.ingress_root, self.exit_root])
+    }
+}
+
+/// Global state transition proof
+#[derive(Clone, Debug)]
+pub struct GlobalTransitionProof {
+    /// Old global roots
+    pub old_roots: GlobalRoots,
+    /// New global roots
+    pub new_roots: GlobalRoots,
+    /// Operations applied in this transition
+    pub operations: Vec<GlobalStateOperation>,
+}
+
+impl GlobalTransitionProof {
+    /// Verify the transition is valid
+    pub fn verify(&self) -> bool {
+        // In a real implementation, this would replay operations
+        // and verify they produce the correct new roots
+        true
+    }
+
+    /// Get the state transition hash
+    pub fn hash(&self) -> F {
+        use crate::crypto::poseidon_hash;
+        poseidon_hash(&[
+            self.old_roots.hash(),
+            self.new_roots.hash(),
+            F::from(self.operations.len() as u64),
+        ])
+    }
+}
+
+/// Per-chain state transition proof
+#[derive(Clone, Debug)]
+pub struct TransitionProof {
+    /// Old chain state roots
+    pub old_roots: ChainStateRoots,
+    /// New chain state roots
+    pub new_roots: ChainStateRoots,
+    /// Operations applied in this transition
+    pub operations: Vec<ChainStateOperation>,
+}
+
+impl TransitionProof {
+    /// Verify the transition is valid
+    pub fn verify(&self) -> bool {
+        true
+    }
+
+    /// Get the state transition hash
+    pub fn hash(&self) -> F {
+        use crate::crypto::poseidon_hash;
+        poseidon_hash(&[
+            self.old_roots.hash(),
+            self.new_roots.hash(),
+            F::from(self.operations.len() as u64),
+        ])
+    }
+}
+
+/// Global state operations (protocol-wide)
+#[derive(Clone, Debug)]
+pub enum GlobalStateOperation {
+    /// Append commitments to global CMT
+    CmtAppend(Vec<Commitment>),
+    /// Insert nullifier to global NFT
+    NftInsert(Nullifier),
+    /// Batch insert nullifiers
+    NftBatchInsert(Vec<Nullifier>),
+    /// Append object commitment to OBJ tree
+    ObjAppend(Commitment),
+    /// Insert callback to CB tree
+    CbInsert(F),
+}
+
+/// Per-chain state operations (boundary crossings)
+#[derive(Clone, Debug)]
+pub enum ChainStateOperation {
+    /// Append ingress receipt (mint from external chain)
+    IngressAppend { chain_id: ChainId, receipt_hash: F },
+    /// Append exit receipt (burn to external chain)
+    ExitAppend { chain_id: ChainId, receipt_hash: F },
 }

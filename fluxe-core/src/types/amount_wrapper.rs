@@ -114,6 +114,10 @@ impl Amount {
     pub fn as_i128(&self) -> i128 {
         self.0 as i128
     }
+
+    pub fn as_u128(&self) -> u128 {
+        self.0
+    }
 }
 
 impl std::ops::Add for Amount {
