@@ -1,26 +1,26 @@
 # FLUXE Deployment Implementation Checklist
 
-**Status**: In Progress - Iteration 4
+**Status**: In Progress - Iteration 5
 **Last Updated**: 2026-01-22
-**Iteration**: 4/20
+**Iteration**: 5/20
 
 ---
 
 ## Progress Overview
 
 - **Phase 1**: 100% Complete (12/12 tasks)
-- **Phase 2**: 75% Complete (9/12 tasks) - Deployments pending
+- **Phase 2**: 83% Complete (10/12 tasks) - Deployments pending
 - **Phase 3**: 100% Complete (13/13 tasks)
-- **Phase 4**: 67% Complete (6/9 tasks) - Testing and audit prep complete
-- **Overall**: 87% Complete (40/46 total tasks)
+- **Phase 4**: 100% Complete (9/9 tasks) - All documentation complete
+- **Overall**: 96% Complete (44/46 total tasks)
 
 ## Test Status
 
-- **fluxe-core**: 341 passing (including 48 bridge tests, 12 storage tests, 39 fee tests, 48 E2E integration tests)
+- **fluxe-core**: 361 passing (including 48 bridge, 12 storage, 39 fee, 48 E2E, 20 monitoring tests)
 - **fluxe-api**: 18 passing (1 pre-existing signature test failure)
 - **fluxe-aggregation-lib**: 13 passing (Groth16 verification)
-- **Ethereum Contracts (Foundry)**: 30 passing
-- **Total**: 402 tests passing
+- **Ethereum Contracts (Foundry)**: 193 passing (enhanced with V2 contracts)
+- **Total**: 585 tests passing
 
 ---
 
@@ -247,6 +247,40 @@
 **Note**: Requires SP1 toolchain installation (`sp1up`) to build guest program.
 Library tests (13 passing) work without SP1 toolchain.
 
+### 2.4 Enhanced Settlement Contracts (zkSync Patterns) ✅ COMPLETED
+
+- [x] FluxeRollupV2.sol - Three-phase batch lifecycle
+  - Status: Complete (612 lines)
+  - File: `contracts/ethereum/contracts/FluxeRollupV2.sol`
+  - Features: Commit→Prove→Execute phases, priority queue integration
+  - Tests: 46 passing
+
+- [x] FluxeMailbox.sol - L1↔L2 communication
+  - Status: Complete (399 lines)
+  - File: `contracts/ethereum/contracts/FluxeMailbox.sol`
+  - Features: L1→L2 requests, L2→L1 message proofs, priority queue
+  - Tests: 41 passing
+
+- [x] Merkle library - Index-based and sorted proofs
+  - Status: Complete (327 lines)
+  - File: `contracts/ethereum/contracts/libraries/Merkle.sol`
+  - Features: Fixed-height validation, both proof types
+  - Tests: 38 passing
+
+- [x] PriorityQueue library - FIFO queue for L1→L2
+  - Status: Complete (292 lines)
+  - File: `contracts/ethereum/contracts/libraries/PriorityQueue.sol`
+  - Features: Expiration tracking, gas-efficient mapping storage
+  - Tests: 38 passing
+
+- [x] Enhanced Solana program (lib_v2.rs)
+  - Status: Complete (1,477 lines)
+  - File: `contracts/solana/programs/fluxe_bridge/src/lib_v2.rs`
+  - Features: Three-phase lifecycle, BatchCommitment, BatchProof, PriorityOperation
+  - Features: ZkProof and Optimistic verification modes
+
+**Adapted from**: zkSync Era settlement patterns at `zksync/`
+
 ---
 
 ## PHASE 3: Cross-Chain Coordination (3-4 weeks) ✅ COMPLETE
@@ -391,11 +425,23 @@ Library tests (13 passing) work without SP1 toolchain.
 - [ ] Circuit audit (external)
 - [ ] Cryptographic review (external)
 
-### 4.3 Mainnet Preparation ⏳
+### 4.3 Mainnet Preparation ✅ COMPLETED
 
-- [ ] Documentation finalization
-- [ ] Monitoring setup
-- [ ] Incident response plan
+- [x] API documentation
+  - Status: Complete
+  - Files: `docs/api/README.md`, `ENDPOINTS.md`, `CLIENT.md`, `TYPES.md`
+  - Features: Full endpoint reference, client SDK docs, type definitions
+
+- [x] Monitoring infrastructure
+  - Status: Complete (700+ lines)
+  - Files: `fluxe-core/src/monitoring/` module
+  - Components: Metrics (Prometheus-compatible), Health checks, Alerts
+  - Tests: 20 tests passing
+
+- [x] Operations documentation
+  - Status: Complete
+  - Files: `docs/operations/INCIDENT_RESPONSE.md`, `RUNBOOK.md`, `DISASTER_RECOVERY.md`
+  - Features: Playbooks, escalation matrix, backup/restore procedures
 
 ---
 
