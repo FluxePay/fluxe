@@ -1,0 +1,115 @@
+# FLUXE Sequencer Configuration
+# Copy to sequencer.toml and customize for your deployment
+
+# ============ Server Settings ============
+[server]
+# Host to bind the JSON-RPC server
+host = "0.0.0.0"
+# Port for JSON-RPC (default: 8545)
+port = 8545
+# Maximum concurrent connections
+max_connections = 1000
+# Request timeout in seconds
+request_timeout_secs = 30
+
+# ============ Sequencer Settings ============
+[sequencer]
+# FLUXE L2 Chain ID (0xF1C5E = 989278)
+chain_id = 989278
+# Maximum transactions per batch
+max_batch_size = 100
+# Minimum transactions to trigger batch creation (with time threshold)
+min_batch_size = 10
+# Time interval to create batch when min_batch_size reached (seconds)
+batch_interval_secs = 10
+# Maximum delay before forcing batch creation (seconds)
+max_batch_delay_secs = 60
+# Maximum pending transactions in queue
+max_pending_txs = 10000
+
+# ============ Ethereum Settlement ============
+[ethereum]
+# Ethereum RPC URL (Sepolia testnet or mainnet)
+rpc_url = "https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY"
+# FluxeRollup contract address
+rollup_address = "0x0000000000000000000000000000000000000000"
+# Private key for sequencer (store securely!)
+# Recommend using environment variable: FLUXE_ETH_PRIVATE_KEY
+private_key = ""
+# Chain ID (11155111 = Sepolia, 1 = Mainnet)
+chain_id = 11155111
+# Gas price strategy: "legacy", "eip1559"
+gas_strategy = "eip1559"
+# Maximum gas price in gwei
+max_gas_price_gwei = 100
+
+# ============ Solana Settlement ============
+[solana]
+# Solana RPC URL (devnet or mainnet-beta)
+rpc_url = "https://api.devnet.solana.com"
+# FLUXE Bridge program ID
+program_id = ""
+# Keypair path (store securely!)
+# Recommend using environment variable: FLUXE_SOLANA_KEYPAIR
+keypair_path = ""
+# Commitment level: "processed", "confirmed", "finalized"
+commitment = "confirmed"
+
+# ============ SP1 Prover Configuration ============
+[prover]
+# SP1 Network prover URL
+network_url = "https://prover.succinct.xyz"
+# SP1 API key (store securely!)
+# Recommend using environment variable: FLUXE_SP1_API_KEY
+api_key = ""
+# Proof generation timeout in seconds
+timeout_secs = 600
+# Maximum concurrent proof requests
+max_concurrent_proofs = 4
+# Use mock prover for testing (no actual proof generation)
+mock_prover = false
+
+# ============ Verification Keys ============
+[vkeys]
+# Path to verification keys directory
+path = "./vks"
+# Individual circuit VK files
+mint_vk = "mint_vk.bin"
+burn_vk = "burn_vk.bin"
+transfer_vk = "transfer_vk.bin"
+object_update_vk = "object_update_vk.bin"
+
+# ============ Storage ============
+[storage]
+# Enable persistent storage
+enabled = true
+# RocksDB data directory
+data_dir = "/data"
+# Enable compression
+compression = true
+# Cache size in MB
+cache_size_mb = 512
+
+# ============ Metrics ============
+[metrics]
+# Enable Prometheus metrics endpoint
+enabled = true
+# Metrics port
+port = 9090
+# Metrics path
+path = "/metrics"
+
+# ============ Logging ============
+[logging]
+# Log level: "trace", "debug", "info", "warn", "error"
+level = "info"
+# Log format: "json", "pretty"
+format = "json"
+# Enable file logging
+file_enabled = false
+# Log file path
+file_path = "/var/log/fluxe/sequencer.log"
+# Log rotation size in MB
+rotation_size_mb = 100
+# Number of rotated files to keep
+rotation_keep = 5

@@ -49,3 +49,11 @@ sp1-build = { workspace = true }
 [[bin]]
 name = "aggregate"
 path = "src/main.rs"
+
+[[bin]]
+name = "extract_vk"
+path = "src/bin/extract_vk.rs"
+
+[[bin]]
+name = "genesis"
+path = "src/bin/genesis.rs"

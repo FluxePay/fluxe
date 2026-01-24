@@ -1,0 +1,1 @@
+export { FluxeWallet } from './FluxeWallet';

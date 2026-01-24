@@ -1,5 +1,5 @@
 [workspace]
-members = ["fluxe-core", "fluxe-circuits", "fluxe-api", "fluxe-rapidsnark", "fluxe-aggregation/lib", "tests/e2e_rapidsnark_sp1"]
+members = ["fluxe-core", "fluxe-circuits", "fluxe-api", "fluxe-rapidsnark", "fluxe-aggregation/lib", "fluxe-sequencer-server", "fluxe-keeper", "tests/e2e_rapidsnark_sp1"]
 resolver = "2"
 
 [workspace.package]

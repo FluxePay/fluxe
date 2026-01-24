@@ -25,7 +25,8 @@ sp1-build = "4.0"
 bn = { version = "0.6.0-v5.0.0", package = "substrate-bn-succinct", default-features = false }
 
 # Serialization (no_std compatible)
-serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+# Pin to <1.0.218 to avoid serde_core split incompatibility with alloy crates
+serde = { version = ">=1.0, <1.0.218", default-features = false, features = ["derive", "alloc"] }
 bincode = { version = "1.3", default-features = false }
 
 # Crypto

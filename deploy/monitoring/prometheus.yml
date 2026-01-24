@@ -1,0 +1,48 @@
+# Prometheus Configuration for FLUXE Sequencer
+# Scrapes metrics from sequencer and related services
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'fluxe-production'
+    environment: 'production'
+
+# Alerting configuration (optional - connect to Alertmanager)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Rule files for alerts
+rule_files:
+  # - /etc/prometheus/alerts/*.yml
+
+# Scrape configurations
+scrape_configs:
+  # FLUXE Sequencer metrics
+  - job_name: 'fluxe-sequencer'
+    static_configs:
+      - targets: ['sequencer:9090']
+    metrics_path: /metrics
+    scrape_interval: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'fluxe-sequencer'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Docker metrics (if using cAdvisor)
+  # - job_name: 'cadvisor'
+  #   static_configs:
+  #     - targets: ['cadvisor:8080']
+
+  # Node exporter for system metrics
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']

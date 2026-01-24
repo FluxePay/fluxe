@@ -1,0 +1,92 @@
+# FLUXE Sequencer Server Docker Image
+# Multi-stage build for minimal image size
+
+# ============ Builder Stage ============
+FROM rust:1.77-bookworm as builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy workspace files
+COPY Cargo.toml Cargo.lock ./
+COPY fluxe-core/Cargo.toml fluxe-core/Cargo.toml
+COPY fluxe-circuits/Cargo.toml fluxe-circuits/Cargo.toml
+COPY fluxe-api/Cargo.toml fluxe-api/Cargo.toml
+COPY fluxe-rapidsnark/Cargo.toml fluxe-rapidsnark/Cargo.toml
+COPY fluxe-aggregation/lib/Cargo.toml fluxe-aggregation/lib/Cargo.toml
+COPY fluxe-sequencer-server/Cargo.toml fluxe-sequencer-server/Cargo.toml
+
+# Create stub lib.rs files to cache dependencies
+RUN mkdir -p fluxe-core/src fluxe-circuits/src fluxe-api/src fluxe-rapidsnark/src \
+    fluxe-aggregation/lib/src fluxe-sequencer-server/src && \
+    echo "pub fn stub() {}" > fluxe-core/src/lib.rs && \
+    echo "pub fn stub() {}" > fluxe-circuits/src/lib.rs && \
+    echo "pub fn stub() {}" > fluxe-api/src/lib.rs && \
+    echo "pub fn stub() {}" > fluxe-rapidsnark/src/lib.rs && \
+    echo "pub fn stub() {}" > fluxe-aggregation/lib/src/lib.rs && \
+    echo "fn main() {}" > fluxe-sequencer-server/src/main.rs
+
+# Build dependencies first (cached layer)
+RUN cargo build --release -p fluxe-sequencer-server || true
+
+# Copy actual source code
+COPY fluxe-core/src fluxe-core/src
+COPY fluxe-circuits/src fluxe-circuits/src
+COPY fluxe-api/src fluxe-api/src
+COPY fluxe-rapidsnark/src fluxe-rapidsnark/src
+COPY fluxe-aggregation/lib/src fluxe-aggregation/lib/src
+COPY fluxe-sequencer-server/src fluxe-sequencer-server/src
+
+# Touch files to invalidate cache
+RUN touch fluxe-sequencer-server/src/main.rs
+
+# Build the actual binary
+RUN cargo build --release -p fluxe-sequencer-server
+
+# ============ Runtime Stage ============
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -r -u 1000 fluxe
+
+# Copy binary from builder
+COPY --from=builder /app/target/release/fluxe-sequencer /usr/local/bin/
+
+# Create data directory
+RUN mkdir -p /data && chown fluxe:fluxe /data
+
+# Switch to non-root user
+USER fluxe
+
+# Set working directory
+WORKDIR /app
+
+# Expose JSON-RPC port
+EXPOSE 8545
+
+# Expose metrics port
+EXPOSE 9090
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl -sf http://localhost:8545 -d '{"jsonrpc":"2.0","method":"fluxe_health","params":[],"id":1}' || exit 1
+
+# Environment variables
+ENV FLUXE_HOST=0.0.0.0
+ENV FLUXE_PORT=8545
+ENV FLUXE_METRICS=true
+ENV RUST_LOG=info
+
+# Run the sequencer
+CMD ["fluxe-sequencer"]

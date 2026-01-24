@@ -1,0 +1,99 @@
+# FLUXE Sequencer Docker Compose Configuration
+# Production deployment with monitoring stack
+
+services:
+  # ============ FLUXE Sequencer ============
+  sequencer:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.sequencer
+    container_name: fluxe-sequencer
+    restart: unless-stopped
+    ports:
+      - "8545:8545"     # JSON-RPC
+      - "9090:9090"     # Metrics
+    environment:
+      - FLUXE_HOST=0.0.0.0
+      - FLUXE_PORT=8545
+      - FLUXE_CHAIN_ID=989278
+      - FLUXE_METRICS=true
+      - FLUXE_VK_PATH=/app/vks
+      - RUST_LOG=info,fluxe_sequencer_server=debug
+      # Ethereum configuration
+      - ETH_RPC_URL=${ETH_RPC_URL:-https://eth-sepolia.g.alchemy.com/v2/your-api-key}
+      - ETH_ROLLUP_ADDRESS=${ETH_ROLLUP_ADDRESS:-}
+      # Solana configuration
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      - SOLANA_PROGRAM_ID=${SOLANA_PROGRAM_ID:-}
+      # SP1 Prover configuration
+      - SP1_PROVER_URL=${SP1_PROVER_URL:-https://prover.succinct.xyz}
+      - SP1_PROVER_KEY=${SP1_PROVER_KEY:-}
+    volumes:
+      - sequencer-data:/data
+      - ./vks:/app/vks:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8545", "-d", '{"jsonrpc":"2.0","method":"fluxe_health","params":[],"id":1}']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - fluxe-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # ============ Prometheus Metrics ============
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: fluxe-prometheus
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - fluxe-network
+    depends_on:
+      - sequencer
+
+  # ============ Grafana Dashboard ============
+  grafana:
+    image: grafana/grafana:10.3.0
+    container_name: fluxe-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-fluxe-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../monitoring/grafana-provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - fluxe-network
+    depends_on:
+      - prometheus
+
+# ============ Volumes ============
+volumes:
+  sequencer-data:
+    name: fluxe-sequencer-data
+  prometheus-data:
+    name: fluxe-prometheus-data
+  grafana-data:
+    name: fluxe-grafana-data
+
+# ============ Networks ============
+networks:
+  fluxe-network:
+    name: fluxe-network
+    driver: bridge
