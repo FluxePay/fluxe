@@ -5,6 +5,7 @@ declare_id!("11111111111111111111111111111112");
 
 pub mod error;
 pub mod groth16;
+pub mod sp1;
 pub mod state;
 pub mod utils;
 
@@ -18,8 +19,18 @@ use utils::verify_merkle_proof;
 /// Chain ID for Solana mainnet (matches ChainConfig)
 pub const CHAIN_ID: u32 = 501;
 
+/// FLUXE L2 network identifier
+/// This is the L2 chain ID, NOT the settlement chain (Solana)
+/// All settlement contracts verify the same L2 chain ID
+/// Value: 0xF1C5E = 989278 (derived from "FLUXE")
+pub const FLUXE_L2_CHAIN_ID: u32 = 0xF1C5E;
+
 /// Maximum number of supported asset types
 pub const MAX_ASSET_TYPES: usize = 256;
+
+/// Size of historical roots circular buffer
+/// Stores ~10 minutes of history at 10-second block intervals
+pub const HISTORICAL_ROOTS_SIZE: usize = 64;
 
 #[program]
 pub mod fluxe_bridge {
@@ -31,16 +42,77 @@ pub mod fluxe_bridge {
         bridge.authority = ctx.accounts.authority.key();
         bridge.sequencer = sequencer;
         bridge.last_finalized_batch = 0;
+        bridge.last_finalized_roots_hash = [0u8; 32];
         bridge.paused = false;
+        bridge.genesis_finalized = false;
         bridge.deposit_nonce = 0;
         bridge.bump = ctx.bumps.bridge;
+        bridge.next_root_index = 0;
 
-        // Initialize pool balances to zero
+        // Initialize historical roots and pool balances to zero
+        bridge.historical_roots = [[0u8; 32]; HISTORICAL_ROOTS_SIZE];
         bridge.pool_balances = [0u64; MAX_ASSET_TYPES];
 
         emit!(BridgeInitialized {
             authority: bridge.authority,
             sequencer: bridge.sequencer,
+        });
+
+        Ok(())
+    }
+
+    /// Finalize genesis block (batch_id = 0) with SP1 proof
+    ///
+    /// Genesis has no transactions and old_roots == new_roots.
+    /// Must be called before any regular batch submissions.
+    ///
+    /// # Arguments
+    /// * `public_values` - SP1 public values (80 bytes): old_roots_hash (32) | new_roots_hash (32) | batch_id (8) | chain_id (4) | proof_count (4)
+    /// * `proof` - SP1 proof bytes (verification delegated to SP1 verifier program)
+    pub fn finalize_genesis(
+        ctx: Context<FinalizeGenesis>,
+        public_values: [u8; 80],
+        _proof: Vec<u8>, // Proof validation handled by SP1 verifier program CPI
+    ) -> Result<()> {
+        let bridge = &mut ctx.accounts.bridge;
+
+        // Validate sequencer
+        require!(
+            ctx.accounts.sequencer.key() == bridge.sequencer,
+            FluxeError::InvalidSequencer
+        );
+
+        // Can only finalize genesis once
+        require!(!bridge.genesis_finalized, FluxeError::GenesisAlreadyFinalized);
+        require!(!bridge.paused, FluxeError::BridgePaused);
+
+        // Decode public values
+        let old_roots_hash: [u8; 32] = public_values[0..32].try_into().unwrap();
+        let new_roots_hash: [u8; 32] = public_values[32..64].try_into().unwrap();
+        let batch_id = u64::from_be_bytes(public_values[64..72].try_into().unwrap());
+        let chain_id = u32::from_be_bytes(public_values[72..76].try_into().unwrap());
+        let proof_count = u32::from_be_bytes(public_values[76..80].try_into().unwrap());
+
+        // Genesis constraints
+        require!(batch_id == 0, FluxeError::InvalidBatchId);
+        require!(chain_id == FLUXE_L2_CHAIN_ID, FluxeError::InvalidChainId);
+        require!(proof_count == 0, FluxeError::InvalidGenesisState); // No transactions in genesis
+        require!(old_roots_hash == new_roots_hash, FluxeError::InvalidGenesisState); // No state change
+
+        // TODO: CPI to SP1 verifier program to verify proof
+        // For now, proof verification is handled externally
+
+        // Finalize genesis state
+        bridge.last_finalized_batch = 0;
+        bridge.last_finalized_roots_hash = new_roots_hash;
+        bridge.genesis_finalized = true;
+
+        // Add genesis root to historical buffer
+        bridge.add_historical_root(new_roots_hash);
+
+        emit!(GenesisFinalized {
+            roots_hash: new_roots_hash,
+            timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())
@@ -146,14 +218,25 @@ pub mod fluxe_bridge {
         Ok(())
     }
 
-    /// Submit a finalized batch from the sequencer
+    /// Submit a finalized batch from the sequencer (IVC-enabled)
+    ///
+    /// IVC guarantees previous block validity - we only verify the latest proof.
+    /// The SP1 proof recursively verifies all prior blocks.
+    ///
+    /// # Arguments
+    /// * `public_values` - SP1 public values (80 bytes): old_roots_hash (32) | new_roots_hash (32) | batch_id (8) | chain_id (4) | proof_count (4)
+    /// * `new_roots` - Full state roots (verified to match new_roots_hash from proof)
+    /// * `proof` - SP1 proof bytes (verification delegated to SP1 verifier program)
     pub fn submit_batch(
         ctx: Context<SubmitBatch>,
-        batch_id: u64,
+        public_values: [u8; 80],
         new_roots: StateRoots,
-        _proof: Vec<u8>, // Proof validation handled by verifier program
+        _proof: Vec<u8>, // Proof validation handled by SP1 verifier program CPI
     ) -> Result<()> {
         let bridge = &mut ctx.accounts.bridge;
+
+        // Genesis must be finalized first
+        require!(bridge.genesis_finalized, FluxeError::GenesisNotFinalized);
 
         // Validate sequencer
         require!(
@@ -161,29 +244,61 @@ pub mod fluxe_bridge {
             FluxeError::InvalidSequencer
         );
 
+        require!(!bridge.paused, FluxeError::BridgePaused);
+
+        // Decode public values
+        let old_roots_hash: [u8; 32] = public_values[0..32].try_into().unwrap();
+        let new_roots_hash: [u8; 32] = public_values[32..64].try_into().unwrap();
+        let batch_id = u64::from_be_bytes(public_values[64..72].try_into().unwrap());
+        let chain_id = u32::from_be_bytes(public_values[72..76].try_into().unwrap());
+        let proof_count = u32::from_be_bytes(public_values[76..80].try_into().unwrap());
+
+        // Validate chain ID
+        require!(chain_id == FLUXE_L2_CHAIN_ID, FluxeError::InvalidChainId);
+
         // Validate batch ID is sequential
         require!(
             batch_id == bridge.last_finalized_batch + 1,
             FluxeError::InvalidBatchId
         );
 
-        require!(!bridge.paused, FluxeError::BridgePaused);
+        // Validate state continuity: old_roots_hash must match last finalized
+        // IVC guarantees this is valid if proof verifies, but we check for defense-in-depth
+        require!(
+            old_roots_hash == bridge.last_finalized_roots_hash,
+            FluxeError::InvalidPreviousRoots
+        );
 
-        // Initialize batch state
-        let batch_state = &mut ctx.accounts.batch_state;
-        batch_state.batch_id = batch_id;
-        batch_state.roots = new_roots;
-        batch_state.timestamp = Clock::get()?.unix_timestamp;
-        batch_state.bump = ctx.bumps.batch_state;
+        // Verify provided roots match the committed hash
+        let computed_hash = compute_roots_hash(&new_roots);
+        require!(
+            computed_hash == new_roots_hash,
+            FluxeError::RootsHashMismatch
+        );
+
+        // TODO: CPI to SP1 verifier program to verify proof
+        // This is the ONLY verification needed - IVC guarantees all prior blocks
 
         // Update bridge state
         bridge.last_finalized_batch = batch_id;
+        bridge.last_finalized_roots_hash = new_roots_hash;
+
+        // Add new root to historical buffer
+        bridge.add_historical_root(new_roots_hash);
+
+        // Initialize batch state account
+        let batch_state = &mut ctx.accounts.batch_state;
+        batch_state.batch_id = batch_id;
+        batch_state.roots_hash = new_roots_hash;
+        batch_state.roots = new_roots;
+        batch_state.proof_count = proof_count;
+        batch_state.timestamp = Clock::get()?.unix_timestamp;
+        batch_state.bump = ctx.bumps.batch_state;
 
         emit!(BatchFinalized {
             batch_id,
-            cmt_root: new_roots.cmt_root,
-            nft_root: new_roots.nft_root,
-            exit_root: new_roots.exit_root,
+            roots_hash: new_roots_hash,
+            proof_count,
             timestamp: batch_state.timestamp,
         });
 
@@ -435,7 +550,20 @@ pub struct Deposit<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(batch_id: u64)]
+pub struct FinalizeGenesis<'info> {
+    #[account(
+        mut,
+        seeds = [b"bridge"],
+        bump = bridge.bump,
+    )]
+    pub bridge: Account<'info, BridgeState>,
+
+    #[account(mut)]
+    pub sequencer: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(public_values: [u8; 80])]
 pub struct SubmitBatch<'info> {
     #[account(
         mut,
@@ -448,7 +576,8 @@ pub struct SubmitBatch<'info> {
         init,
         payer = sequencer,
         space = 8 + BatchState::LEN,
-        seeds = [b"batch", batch_id.to_le_bytes().as_ref()],
+        // batch_id is at bytes 64-72 in public_values (big-endian)
+        seeds = [b"batch", &public_values[64..72]],
         bump
     )]
     pub batch_state: Account<'info, BatchState>,
@@ -555,12 +684,37 @@ fn compute_ingress_hash(
     hash.0
 }
 
+/// Compute SHA256 hash of state roots (matches SP1 program's StateRoots::hash())
+/// Hash order: cmt, nft, obj, cb, ingress, exit, sanctions, pool_rules
+fn compute_roots_hash(roots: &StateRoots) -> [u8; 32] {
+    use solana_program::hash::hashv;
+
+    let hash = hashv(&[
+        &roots.cmt_root,
+        &roots.nft_root,
+        &roots.obj_root,
+        &roots.cb_root,
+        &roots.ingress_root,
+        &roots.exit_root,
+        &roots.sanctions_root,
+        &roots.pool_rules_root,
+    ]);
+
+    hash.to_bytes()
+}
+
 // ============ Events ============
 
 #[event]
 pub struct BridgeInitialized {
     pub authority: Pubkey,
     pub sequencer: Pubkey,
+}
+
+#[event]
+pub struct GenesisFinalized {
+    pub roots_hash: [u8; 32],
+    pub timestamp: i64,
 }
 
 #[event]
@@ -592,9 +746,8 @@ pub struct DepositEvent {
 #[event]
 pub struct BatchFinalized {
     pub batch_id: u64,
-    pub cmt_root: [u8; 32],
-    pub nft_root: [u8; 32],
-    pub exit_root: [u8; 32],
+    pub roots_hash: [u8; 32],
+    pub proof_count: u32,
     pub timestamp: i64,
 }
 

@@ -1133,8 +1133,9 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
- "groth16-solana",
+ "groth16-solana 0.2.0",
  "solana-program",
+ "sp1-solana",
 ]
 
 [[package]]
@@ -1212,6 +1213,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "groth16-solana"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a6d1ffb18dbf5cfc60b11bd7da88474c672870247c1e5b498619bcb6ba3d8f5"
+dependencies = [
+ "ark-bn254 0.5.0",
+ "ark-ec 0.5.0",
+ "ark-ff 0.5.0",
+ "ark-serialize 0.5.0",
+ "num-bigint",
+ "solana-bn254",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1263,6 +1279,12 @@ checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hmac"
@@ -2271,6 +2293,21 @@ dependencies = [
  "subtle",
  "thiserror 1.0.69",
  "zeroize",
+]
+
+[[package]]
+name = "sp1-solana"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/sp1-solana#4181cae00d7493ede8a33066cb56683acb1dca72"
+dependencies = [
+ "ark-bn254 0.4.0",
+ "ark-ff 0.4.2",
+ "ark-serialize 0.4.2",
+ "groth16-solana 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex",
+ "num-bigint",
+ "sha2 0.10.9",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

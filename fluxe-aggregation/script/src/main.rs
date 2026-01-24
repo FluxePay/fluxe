@@ -8,7 +8,8 @@
 
 use anyhow::{Context, Result};
 use fluxe_aggregation_lib::{BatchInput, BatchOutput, ProofEntry, StateRoots, TxType};
-use sp1_sdk::{include_elf, ProverClient, SP1Stdin};
+use sp1_sdk::{include_elf, Prover, ProverClient, SP1ProvingKey, SP1Stdin, SP1VerifyingKey};
+use sp1_sdk::EnvProver;
 use std::path::PathBuf;
 use tracing::{info, warn};
 
@@ -140,7 +141,7 @@ mod arkworks_convert {
 #[derive(Debug, Clone)]
 pub struct ProofBatch {
     pub batch_id: u64,
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub timestamp: u64,
     pub old_roots: StateRoots,
     pub new_roots: StateRoots,
@@ -152,21 +153,27 @@ pub struct ProofBatch {
 pub struct FluxeProof {
     pub tx_type: TxType,
     pub proof_bytes: Vec<u8>,
-    pub vk_bytes: Vec<u8>,
     pub public_inputs: Vec<[u8; 32]>,
 }
 
 /// The FLUXE proof aggregator
 pub struct Aggregator {
-    client: ProverClient,
+    client: EnvProver,
+    pk: SP1ProvingKey,
+    vk: SP1VerifyingKey,
 }
 
 impl Aggregator {
     /// Create a new aggregator
     pub fn new() -> Self {
-        Self {
-            client: ProverClient::from_env(),
-        }
+        let client = ProverClient::from_env();
+        let (pk, vk) = client.setup(AGGREGATOR_ELF);
+        Self { client, pk, vk }
+    }
+
+    /// Get the verifying key for on-chain verification
+    pub fn verifying_key(&self) -> &SP1VerifyingKey {
+        &self.vk
     }
 
     /// Aggregate a batch of proofs
@@ -179,18 +186,11 @@ impl Aggregator {
         );
 
         // Build the batch input for the guest program
-        let mut verifying_keys = Vec::new();
-        let mut proofs = Vec::new();
-
-        for fluxe_proof in &batch.proofs {
-            verifying_keys.push(fluxe_proof.vk_bytes.clone());
-
-            proofs.push(ProofEntry {
-                tx_type: fluxe_proof.tx_type.clone(),
-                proof_bytes: fluxe_proof.proof_bytes.clone(),
-                public_inputs: fluxe_proof.public_inputs.clone(),
-            });
-        }
+        let proofs: Vec<ProofEntry> = batch.proofs.iter().map(|p| ProofEntry {
+            tx_type: p.tx_type,
+            proof_bytes: p.proof_bytes.clone(),
+            public_inputs: p.public_inputs.clone(),
+        }).collect();
 
         let batch_input = BatchInput {
             batch_id: batch.batch_id,
@@ -198,7 +198,6 @@ impl Aggregator {
             timestamp: batch.timestamp,
             old_roots: batch.old_roots.clone(),
             new_roots: batch.new_roots.clone(),
-            verifying_keys,
             proofs,
         };
 
@@ -206,9 +205,9 @@ impl Aggregator {
         let mut stdin = SP1Stdin::new();
         stdin.write(&batch_input);
 
-        // Execute and prove
+        // Execute first to check it works
         info!("Executing guest program...");
-        let (public_values, report) = self
+        let (mut public_values, report) = self
             .client
             .execute(AGGREGATOR_ELF, &stdin)
             .run()
@@ -219,9 +218,8 @@ impl Aggregator {
             "Guest execution complete"
         );
 
-        // Decode the output
-        let output: BatchOutput = bincode::deserialize(public_values.as_slice())
-            .context("Failed to deserialize batch output")?;
+        // Read the output from public values
+        let output: BatchOutput = public_values.read();
 
         info!(
             verified_count = output.proof_count,
@@ -232,7 +230,8 @@ impl Aggregator {
         info!("Generating SP1 proof...");
         let proof = self
             .client
-            .prove(AGGREGATOR_ELF, &stdin)
+            .prove(&self.pk, &stdin)
+            .groth16()
             .run()
             .context("Failed to generate SP1 proof")?;
 
@@ -240,12 +239,12 @@ impl Aggregator {
 
         Ok(AggregatedProof {
             batch_id: batch.batch_id,
-            chain_id: batch.chain_id,
+            chain_id: batch.chain_id as u64,
             proof_count: output.proof_count,
             old_roots_hash: batch.old_roots.hash(),
             new_roots_hash: batch.new_roots.hash(),
             sp1_proof: proof.bytes(),
-            public_values: public_values.to_vec(),
+            public_values: proof.public_values.to_vec(),
         })
     }
 
@@ -258,18 +257,11 @@ impl Aggregator {
         );
 
         // Build the batch input
-        let mut verifying_keys = Vec::new();
-        let mut proofs = Vec::new();
-
-        for fluxe_proof in &batch.proofs {
-            verifying_keys.push(fluxe_proof.vk_bytes.clone());
-
-            proofs.push(ProofEntry {
-                tx_type: fluxe_proof.tx_type.clone(),
-                proof_bytes: fluxe_proof.proof_bytes.clone(),
-                public_inputs: fluxe_proof.public_inputs.clone(),
-            });
-        }
+        let proofs: Vec<ProofEntry> = batch.proofs.iter().map(|p| ProofEntry {
+            tx_type: p.tx_type,
+            proof_bytes: p.proof_bytes.clone(),
+            public_inputs: p.public_inputs.clone(),
+        }).collect();
 
         let batch_input = BatchInput {
             batch_id: batch.batch_id,
@@ -277,14 +269,13 @@ impl Aggregator {
             timestamp: batch.timestamp,
             old_roots: batch.old_roots.clone(),
             new_roots: batch.new_roots.clone(),
-            verifying_keys,
             proofs,
         };
 
         let mut stdin = SP1Stdin::new();
         stdin.write(&batch_input);
 
-        let (public_values, report) = self
+        let (mut public_values, report) = self
             .client
             .execute(AGGREGATOR_ELF, &stdin)
             .run()
@@ -295,16 +286,9 @@ impl Aggregator {
             "Execution complete"
         );
 
-        let output: BatchOutput = bincode::deserialize(public_values.as_slice())
-            .context("Failed to deserialize batch output")?;
+        let output: BatchOutput = public_values.read();
 
         Ok(output)
-    }
-}
-
-impl Default for Aggregator {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -364,7 +348,7 @@ async fn main() -> Result<()> {
     // Create an empty batch for demonstration
     let batch = ProofBatch {
         batch_id: 1,
-        chain_id: 1, // Ethereum mainnet
+        chain_id: 1u32, // Ethereum mainnet
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -487,19 +471,18 @@ mod tests {
 
         // Convert to FLUXE format
         let proof_bytes = arkworks_convert::proof_to_gnark(&proof);
-        let vk_bytes = arkworks_convert::vk_to_gnark(&vk);
+        let _vk_bytes = arkworks_convert::vk_to_gnark(&vk);
         let public_inputs = arkworks_convert::public_inputs_to_bytes(&[output]);
 
         let fluxe_proof = FluxeProof {
             tx_type: TxType::Transfer,
             proof_bytes,
-            vk_bytes,
             public_inputs,
         };
 
         let batch = ProofBatch {
             batch_id: 1,
-            chain_id: 1,
+            chain_id: 1u32,
             timestamp: 1234567890,
             old_roots: StateRoots::default(),
             new_roots: StateRoots::default(),

@@ -1,7 +1,13 @@
 use anchor_lang::prelude::*;
-use crate::MAX_ASSET_TYPES;
+use crate::{MAX_ASSET_TYPES, HISTORICAL_ROOTS_SIZE};
 
 /// Bridge state - main program account
+///
+/// ## IVC Architecture
+///
+/// This contract supports IVC (Incrementally Verifiable Computation) where each
+/// block proof recursively verifies the previous block. The latest proof
+/// cryptographically guarantees all history validity.
 #[account]
 pub struct BridgeState {
     /// Authority who can manage the bridge
@@ -13,14 +19,27 @@ pub struct BridgeState {
     /// Last finalized batch ID
     pub last_finalized_batch: u64,
 
+    /// Hash of the last finalized state roots (for IVC state continuity)
+    pub last_finalized_roots_hash: [u8; 32],
+
     /// Current deposit nonce
     pub deposit_nonce: u64,
+
+    /// Whether genesis block has been finalized
+    pub genesis_finalized: bool,
 
     /// Whether the bridge is paused
     pub paused: bool,
 
     /// PDA bump seed
     pub bump: u8,
+
+    /// Historical roots circular buffer for UTXO spending proofs
+    /// Stores recent state root hashes; transactions can reference any of these
+    pub historical_roots: [[u8; 32]; HISTORICAL_ROOTS_SIZE],
+
+    /// Next write index in historical roots buffer
+    pub next_root_index: u8,
 
     /// Pool balances per asset type
     pub pool_balances: [u64; MAX_ASSET_TYPES],
@@ -30,10 +49,29 @@ impl BridgeState {
     pub const LEN: usize = 32 + // authority
         32 + // sequencer
         8 +  // last_finalized_batch
+        32 + // last_finalized_roots_hash
         8 +  // deposit_nonce
+        1 +  // genesis_finalized
         1 +  // paused
         1 +  // bump
+        (32 * HISTORICAL_ROOTS_SIZE) + // historical_roots
+        1 +  // next_root_index
         (8 * MAX_ASSET_TYPES); // pool_balances
+
+    /// Add a root hash to the historical roots circular buffer
+    pub fn add_historical_root(&mut self, root_hash: [u8; 32]) {
+        self.historical_roots[self.next_root_index as usize] = root_hash;
+        self.next_root_index = (self.next_root_index + 1) % (HISTORICAL_ROOTS_SIZE as u8);
+    }
+
+    /// Check if a root hash exists in the historical roots buffer
+    /// Zero hash is always valid (used for empty/padding slots)
+    pub fn contains_historical_root(&self, root_hash: &[u8; 32]) -> bool {
+        if root_hash == &[0u8; 32] {
+            return true;
+        }
+        self.historical_roots.iter().any(|r| r == root_hash)
+    }
 }
 
 /// Asset configuration
@@ -99,14 +137,24 @@ impl StateRoots {
     pub const LEN: usize = 32 * 8; // 8 roots x 32 bytes
 }
 
-/// Batch state - one per finalized batch
+/// Batch state - one per finalized batch (IVC-enabled)
+///
+/// Stores both roots_hash (for IVC verification) and full roots (for withdrawal proofs).
+/// The roots_hash is committed by the SP1 proof, and full roots are verified to match.
 #[account]
 pub struct BatchState {
     /// Batch ID
     pub batch_id: u64,
 
-    /// State roots for this batch
+    /// Hash of state roots for this batch (SHA256 of 8 roots)
+    /// This is what the SP1 proof commits to
+    pub roots_hash: [u8; 32],
+
+    /// Full state roots (needed for withdrawal verification)
     pub roots: StateRoots,
+
+    /// Number of proofs verified in this batch
+    pub proof_count: u32,
 
     /// Unix timestamp when batch was finalized
     pub timestamp: i64,
@@ -117,9 +165,11 @@ pub struct BatchState {
 
 impl BatchState {
     pub const LEN: usize = 8 + // batch_id
+        32 + // roots_hash
         StateRoots::LEN + // roots
-        8 + // timestamp
-        1;  // bump
+        4 +  // proof_count
+        8 +  // timestamp
+        1;   // bump
 }
 
 /// Deposit record - created for each deposit

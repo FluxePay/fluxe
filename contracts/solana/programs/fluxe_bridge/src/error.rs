@@ -133,9 +133,39 @@ pub enum FluxeError {
     #[msg("Priority operation already processed")]
     PriorityOpAlreadyProcessed,
 
-    // ============ Groth16 Verification Errors ============
+    // ============ ZK Verification Errors ============
 
-    /// Groth16 proof verification failed
+    /// Groth16 proof verification failed (legacy)
     #[msg("Groth16 proof verification failed")]
     Groth16ProofInvalid,
+
+    /// Invalid FLUXE L2 chain ID in batch proof
+    #[msg("Invalid FLUXE L2 chain ID")]
+    InvalidChainId,
+
+    /// SP1 batch proof verification failed
+    #[msg("SP1 batch proof verification failed")]
+    SP1ProofInvalid,
+
+    // ============ IVC Errors ============
+
+    /// Genesis block has already been finalized
+    #[msg("Genesis block has already been finalized")]
+    GenesisAlreadyFinalized,
+
+    /// Genesis block must be finalized before submitting batches
+    #[msg("Genesis block must be finalized first")]
+    GenesisNotFinalized,
+
+    /// Invalid genesis state (must have no txns, old_roots == new_roots)
+    #[msg("Invalid genesis state")]
+    InvalidGenesisState,
+
+    /// Previous roots hash doesn't match last finalized state
+    #[msg("Previous roots hash doesn't match last finalized state")]
+    InvalidPreviousRoots,
+
+    /// Provided roots don't match committed roots hash
+    #[msg("Provided roots don't match committed roots hash")]
+    RootsHashMismatch,
 }

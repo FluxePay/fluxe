@@ -9,8 +9,8 @@ description = "SP1 guest program for FLUXE batch state transition proof"
 # Shared types (includes Groth16 verifier)
 fluxe-aggregation-lib = { workspace = true, default-features = false }
 
-# SP1 zkVM runtime
-sp1-zkvm = { workspace = true }
+# SP1 zkVM runtime (with verify feature for IVC recursive verification)
+sp1-zkvm = { workspace = true, features = ["verify"] }
 
 # Serialization
 serde = { workspace = true }

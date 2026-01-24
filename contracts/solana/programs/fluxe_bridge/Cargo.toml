@@ -20,5 +20,8 @@ anchor-lang = { version = "0.30.0", features = ["init-if-needed"] }
 anchor-spl = { version = "0.30.0" }
 solana-program = "1.18"
 
-# Groth16 verification using alt_bn128 syscalls
+# SP1 ZK proof verification for batch proofs
+sp1-solana = { git = "https://github.com/succinctlabs/sp1-solana" }
+
+# Groth16 verification for individual proofs (legacy, kept for reference)
 groth16-solana = { path = "../../../../groth16-solana" }

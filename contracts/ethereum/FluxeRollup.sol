@@ -1,11 +1,34 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./interfaces/IGroth16Verifier.sol";
+import "./interfaces/ISP1Verifier.sol";
 
 /// @title FluxeRollup - State root commitment contract for FLUXE L2
-/// @notice Manages batch submissions and state root finalization
+/// @notice Manages batch submissions and state root finalization using SP1 ZK proofs
 /// @dev Only the sequencer can submit batches; anyone can verify state
+///
+/// ## IVC (Incrementally Verifiable Computation) Architecture
+///
+/// FLUXE uses IVC where each block proof recursively verifies the previous block:
+/// 1. Genesis block (batch_id=0) establishes initial state with no transactions
+/// 2. Each subsequent block proof includes verification of previous block proof
+/// 3. The latest proof cryptographically guarantees ALL history validity
+/// 4. This contract only verifies the latest proof - IVC ensures chain integrity
+///
+/// ## Historical Root Buffer
+///
+/// A 64-slot circular buffer stores recent state root hashes, enabling:
+/// - UTXO spending proofs to reference historical states
+/// - ~10 minutes of history at 10-second block intervals
+///
+/// ## Public Values Format (from SP1 BatchOutput)
+///
+/// The SP1 program commits the following public values (serialized):
+/// - old_roots_hash: bytes32 - SHA256 of previous state tree roots
+/// - new_roots_hash: bytes32 - SHA256 of new state tree roots
+/// - batch_id: uint64 - Sequential batch identifier
+/// - chain_id: uint32 - Target chain identifier
+/// - proof_count: uint32 - Number of individual proofs verified
 contract FluxeRollup {
     /// @notice State roots structure matching FLUXE core types
     struct StateRoots {
@@ -27,10 +50,26 @@ contract FluxeRollup {
         bytes32 stateRootsHash;
     }
 
+    // ============ Constants ============
+
+    /// @notice FLUXE block program verification key (IVC-enabled)
+    /// @dev Generated from SP1 program ELF. Same vkey used for genesis and all blocks.
+    /// To regenerate: cargo run --release --bin extract_vk -p fluxe-aggregation-script
+    bytes32 public constant FLUXE_BLOCK_VKEY = 0x00331d2a466af052f5758e7029f9980698a09eb91384bac07237461fe1d81645;
+
+    /// @notice FLUXE L2 network identifier
+    /// @dev This is the L2 chain ID, NOT the settlement chain (Ethereum/Solana)
+    /// All settlement contracts verify the same L2 chain ID
+    uint32 public constant FLUXE_L2_CHAIN_ID = 0xF1C5E; // "FLUXE" = 989278
+
+    /// @notice Size of historical roots circular buffer
+    /// @dev Stores ~10 minutes of history at 10-second block intervals
+    uint8 public constant HISTORICAL_ROOTS_SIZE = 64;
+
     // ============ State Variables ============
 
-    /// @notice Groth16 proof verifier contract
-    IGroth16Verifier public immutable verifier;
+    /// @notice SP1 proof verifier (gateway or direct verifier)
+    ISP1Verifier public immutable verifier;
 
     /// @notice Authorized sequencer address
     address public sequencer;
@@ -44,16 +83,36 @@ contract FluxeRollup {
     /// @notice Last finalized batch ID
     uint64 public lastFinalizedBatchId;
 
+    /// @notice Hash of the last finalized state roots
+    /// @dev Used for state continuity checks with IVC
+    bytes32 public lastFinalizedRootsHash;
+
     /// @notice Mapping of batch ID to finalized state roots
     mapping(uint64 => StateRoots) public finalizedBatches;
 
     /// @notice Mapping of batch ID to metadata
     mapping(uint64 => BatchMetadata) public batchMetadata;
 
+    /// @notice Historical roots circular buffer for UTXO spending proofs
+    /// @dev Stores recent state root hashes; transactions can reference any of these
+    bytes32[64] public historicalRoots;
+
+    /// @notice Next write index in historical roots buffer
+    uint8 public nextRootIndex;
+
+    /// @notice Whether genesis block has been finalized
+    /// @dev Genesis must be finalized before any regular batches
+    bool public genesisFinalized;
+
     /// @notice Whether the contract is paused
     bool public paused;
 
     // ============ Events ============
+
+    event GenesisFinalized(
+        bytes32 indexed stateRootsHash,
+        uint64 timestamp
+    );
 
     event BatchSubmitted(
         uint64 indexed batchId,
@@ -85,12 +144,17 @@ contract FluxeRollup {
     error InvalidBatchId(uint64 expected, uint64 received);
     error InvalidPreviousRoots();
     error InvalidProof();
+    error InvalidChainId(uint32 expected, uint32 received);
+    error InvalidPublicValues();
     error OnlySequencer();
     error OnlyOwner();
     error OnlyPendingSequencer();
     error ContractPaused();
     error ZeroAddress();
     error NoPendingSequencer();
+    error GenesisAlreadyFinalized();
+    error GenesisNotFinalized();
+    error InvalidGenesisState();
 
     // ============ Modifiers ============
 
@@ -112,91 +176,159 @@ contract FluxeRollup {
     // ============ Constructor ============
 
     /// @notice Initialize the rollup contract
-    /// @param _verifier Address of the Groth16 verifier contract
+    /// @param _verifier Address of the SP1 verifier (use SP1VerifierGateway for automatic routing)
     /// @param _sequencer Initial sequencer address
     constructor(address _verifier, address _sequencer) {
         if (_verifier == address(0)) revert ZeroAddress();
         if (_sequencer == address(0)) revert ZeroAddress();
 
-        verifier = IGroth16Verifier(_verifier);
+        verifier = ISP1Verifier(_verifier);
         sequencer = _sequencer;
         owner = msg.sender;
-        lastFinalizedBatchId = 0;
-
-        // Initialize genesis state roots (all zeros)
-        finalizedBatches[0] = StateRoots({
-            cmtRoot: bytes32(0),
-            nftRoot: bytes32(0),
-            objRoot: bytes32(0),
-            cbRoot: bytes32(0),
-            ingressRoot: bytes32(0),
-            exitRoot: bytes32(0),
-            sanctionsRoot: bytes32(0),
-            poolRulesRoot: bytes32(0)
-        });
+        // Note: genesisFinalized defaults to false
+        // Genesis must be submitted via finalizeGenesis() before any batches
     }
 
     // ============ External Functions ============
 
-    /// @notice Submit a new batch with state transition proof
-    /// @param batchId Sequential batch identifier
-    /// @param prevRoots Previous state roots (must match last finalized)
-    /// @param newRoots New state roots after batch execution
-    /// @param proof Groth16 proof of valid state transition
-    /// @param txCount Number of transactions in the batch
-    function submitBatch(
-        uint64 batchId,
-        StateRoots calldata prevRoots,
-        StateRoots calldata newRoots,
-        bytes calldata proof,
-        uint32 txCount
+    /// @notice Finalize genesis block (batch_id = 0) with SP1 proof
+    /// @dev Genesis has no transactions and old_roots == new_roots
+    /// Must be called before any regular batch submissions
+    /// @param publicValues SP1 public values (serialized BatchOutput)
+    /// @param proofBytes SP1 proof bytes (Groth16 or PLONK wrapped)
+    function finalizeGenesis(
+        bytes calldata publicValues,
+        bytes calldata proofBytes
     ) external onlySequencer whenNotPaused {
-        // Validate batch ID is sequential
-        if (batchId != lastFinalizedBatchId + 1) {
-            revert InvalidBatchId(lastFinalizedBatchId + 1, batchId);
+        // Can only finalize genesis once
+        if (genesisFinalized) revert GenesisAlreadyFinalized();
+
+        // Decode and validate public values
+        if (publicValues.length != 80) revert InvalidPublicValues();
+
+        bytes32 proofOldRootsHash;
+        bytes32 proofNewRootsHash;
+        uint64 proofBatchId;
+        uint32 proofChainId;
+        uint32 proofCount;
+
+        assembly {
+            let ptr := publicValues.offset
+            proofOldRootsHash := calldataload(ptr)
+            proofNewRootsHash := calldataload(add(ptr, 32))
+            proofBatchId := shr(192, calldataload(add(ptr, 64)))
+            proofChainId := shr(224, calldataload(add(ptr, 72)))
+            proofCount := shr(224, calldataload(add(ptr, 76)))
         }
 
-        // Validate previous roots match last finalized state
-        StateRoots storage lastRoots = finalizedBatches[lastFinalizedBatchId];
-        if (!_rootsMatch(prevRoots, lastRoots)) {
-            revert InvalidPreviousRoots();
-        }
+        // Genesis constraints
+        if (proofBatchId != 0) revert InvalidBatchId(0, proofBatchId);
+        if (proofChainId != FLUXE_L2_CHAIN_ID) revert InvalidChainId(FLUXE_L2_CHAIN_ID, proofChainId);
+        if (proofCount != 0) revert InvalidGenesisState(); // No transactions in genesis
+        if (proofOldRootsHash != proofNewRootsHash) revert InvalidGenesisState(); // No state change
 
-        // Construct public inputs for proof verification
-        uint256[] memory publicInputs = _constructPublicInputs(prevRoots, newRoots);
-
-        // Verify the aggregated proof
-        if (!verifier.verifyProof(proof, publicInputs)) {
+        // Verify the SP1 proof
+        try verifier.verifyProof(FLUXE_BLOCK_VKEY, publicValues, proofBytes) {
+            // Verification succeeded
+        } catch {
             revert InvalidProof();
         }
 
-        // Store new finalized state
-        finalizedBatches[batchId] = newRoots;
-        lastFinalizedBatchId = batchId;
+        // Finalize genesis state
+        lastFinalizedBatchId = 0;
+        lastFinalizedRootsHash = proofNewRootsHash;
+        genesisFinalized = true;
 
-        // Store batch metadata
-        bytes32 rootsHash = keccak256(abi.encode(newRoots));
-        batchMetadata[batchId] = BatchMetadata({
-            batchId: batchId,
+        // Add genesis root to historical buffer
+        _addHistoricalRoot(proofNewRootsHash);
+
+        // Store metadata
+        batchMetadata[0] = BatchMetadata({
+            batchId: 0,
             timestamp: uint64(block.timestamp),
-            txCount: txCount,
-            stateRootsHash: rootsHash
+            txCount: 0,
+            stateRootsHash: proofNewRootsHash
         });
 
-        emit BatchSubmitted(batchId, rootsHash, txCount, uint64(block.timestamp));
+        emit GenesisFinalized(proofNewRootsHash, uint64(block.timestamp));
     }
 
-    /// @notice Get current finalized state roots
-    /// @return Current state roots
-    function getCurrentRoots() external view returns (StateRoots memory) {
-        return finalizedBatches[lastFinalizedBatchId];
+    /// @notice Submit a new batch with SP1 state transition proof (IVC-enabled)
+    /// @dev IVC guarantees previous block validity - we only verify the latest proof
+    /// @param publicValues SP1 public values (serialized BatchOutput from SP1 program)
+    /// @param proofBytes SP1 proof bytes (Groth16 or PLONK wrapped)
+    function submitBatch(
+        bytes calldata publicValues,
+        bytes calldata proofBytes
+    ) external onlySequencer whenNotPaused {
+        // Genesis must be finalized first
+        if (!genesisFinalized) revert GenesisNotFinalized();
+
+        // Decode and validate public values from SP1 proof
+        // Format: old_roots_hash (32) | new_roots_hash (32) | batch_id (8) | chain_id (4) | proof_count (4)
+        if (publicValues.length != 80) revert InvalidPublicValues();
+
+        bytes32 proofOldRootsHash;
+        bytes32 proofNewRootsHash;
+        uint64 proofBatchId;
+        uint32 proofChainId;
+        uint32 proofCount;
+
+        assembly {
+            let ptr := publicValues.offset
+            proofOldRootsHash := calldataload(ptr)
+            proofNewRootsHash := calldataload(add(ptr, 32))
+            proofBatchId := shr(192, calldataload(add(ptr, 64)))
+            proofChainId := shr(224, calldataload(add(ptr, 72)))
+            proofCount := shr(224, calldataload(add(ptr, 76)))
+        }
+
+        // Validate chain ID matches FLUXE L2
+        if (proofChainId != FLUXE_L2_CHAIN_ID) {
+            revert InvalidChainId(FLUXE_L2_CHAIN_ID, proofChainId);
+        }
+
+        // Validate batch ID is sequential
+        if (proofBatchId != lastFinalizedBatchId + 1) {
+            revert InvalidBatchId(lastFinalizedBatchId + 1, proofBatchId);
+        }
+
+        // Validate state continuity: old_roots_hash must match last finalized
+        // IVC guarantees this is valid if proof verifies, but we check for defense-in-depth
+        if (proofOldRootsHash != lastFinalizedRootsHash) {
+            revert InvalidPreviousRoots();
+        }
+
+        // Verify the SP1 proof
+        // This is the ONLY verification needed - IVC guarantees all prior blocks
+        try verifier.verifyProof(FLUXE_BLOCK_VKEY, publicValues, proofBytes) {
+            // Verification succeeded
+        } catch {
+            revert InvalidProof();
+        }
+
+        // Update finalized state
+        lastFinalizedBatchId = proofBatchId;
+        lastFinalizedRootsHash = proofNewRootsHash;
+
+        // Add new root to historical buffer
+        _addHistoricalRoot(proofNewRootsHash);
+
+        // Store batch metadata
+        batchMetadata[proofBatchId] = BatchMetadata({
+            batchId: proofBatchId,
+            timestamp: uint64(block.timestamp),
+            txCount: proofCount,
+            stateRootsHash: proofNewRootsHash
+        });
+
+        emit BatchSubmitted(proofBatchId, proofNewRootsHash, proofCount, uint64(block.timestamp));
     }
 
-    /// @notice Get state roots for a specific batch
-    /// @param batchId Batch ID to query
-    /// @return State roots for the batch
-    function getRoots(uint64 batchId) external view returns (StateRoots memory) {
-        return finalizedBatches[batchId];
+    /// @notice Get current finalized state roots hash
+    /// @return Hash of current state roots
+    function getCurrentRootsHash() external view returns (bytes32) {
+        return lastFinalizedRootsHash;
     }
 
     /// @notice Get batch metadata
@@ -206,24 +338,22 @@ contract FluxeRollup {
         return batchMetadata[batchId];
     }
 
-    /// @notice Verify a state root exists in a finalized batch
-    /// @param batchId Batch ID to check
-    /// @param rootType Type of root (0=cmt, 1=nft, 2=obj, 3=cb, 4=ingress, 5=exit)
-    /// @param root Root value to verify
-    /// @return True if root matches
-    function verifyRoot(uint64 batchId, uint8 rootType, bytes32 root) external view returns (bool) {
-        StateRoots storage roots = finalizedBatches[batchId];
-
-        if (rootType == 0) return roots.cmtRoot == root;
-        if (rootType == 1) return roots.nftRoot == root;
-        if (rootType == 2) return roots.objRoot == root;
-        if (rootType == 3) return roots.cbRoot == root;
-        if (rootType == 4) return roots.ingressRoot == root;
-        if (rootType == 5) return roots.exitRoot == root;
-        if (rootType == 6) return roots.sanctionsRoot == root;
-        if (rootType == 7) return roots.poolRulesRoot == root;
-
+    /// @notice Check if a root hash exists in the historical roots buffer
+    /// @dev Zero hash is always valid (used for empty/padding slots)
+    /// @param rootHash Root hash to check
+    /// @return True if root exists in buffer
+    function containsHistoricalRoot(bytes32 rootHash) external view returns (bool) {
+        if (rootHash == bytes32(0)) return true;
+        for (uint8 i = 0; i < HISTORICAL_ROOTS_SIZE; i++) {
+            if (historicalRoots[i] == rootHash) return true;
+        }
         return false;
+    }
+
+    /// @notice Get all historical roots
+    /// @return Array of 64 historical root hashes
+    function getHistoricalRoots() external view returns (bytes32[64] memory) {
+        return historicalRoots;
     }
 
     // ============ Admin Functions ============
@@ -271,45 +401,10 @@ contract FluxeRollup {
 
     // ============ Internal Functions ============
 
-    /// @notice Check if two StateRoots match
-    function _rootsMatch(StateRoots calldata a, StateRoots storage b) internal view returns (bool) {
-        return a.cmtRoot == b.cmtRoot &&
-               a.nftRoot == b.nftRoot &&
-               a.objRoot == b.objRoot &&
-               a.cbRoot == b.cbRoot &&
-               a.ingressRoot == b.ingressRoot &&
-               a.exitRoot == b.exitRoot &&
-               a.sanctionsRoot == b.sanctionsRoot &&
-               a.poolRulesRoot == b.poolRulesRoot;
-    }
-
-    /// @notice Construct public inputs array for proof verification
-    function _constructPublicInputs(
-        StateRoots calldata prevRoots,
-        StateRoots calldata newRoots
-    ) internal pure returns (uint256[] memory) {
-        uint256[] memory inputs = new uint256[](16);
-
-        // Previous roots
-        inputs[0] = uint256(prevRoots.cmtRoot);
-        inputs[1] = uint256(prevRoots.nftRoot);
-        inputs[2] = uint256(prevRoots.objRoot);
-        inputs[3] = uint256(prevRoots.cbRoot);
-        inputs[4] = uint256(prevRoots.ingressRoot);
-        inputs[5] = uint256(prevRoots.exitRoot);
-        inputs[6] = uint256(prevRoots.sanctionsRoot);
-        inputs[7] = uint256(prevRoots.poolRulesRoot);
-
-        // New roots
-        inputs[8] = uint256(newRoots.cmtRoot);
-        inputs[9] = uint256(newRoots.nftRoot);
-        inputs[10] = uint256(newRoots.objRoot);
-        inputs[11] = uint256(newRoots.cbRoot);
-        inputs[12] = uint256(newRoots.ingressRoot);
-        inputs[13] = uint256(newRoots.exitRoot);
-        inputs[14] = uint256(newRoots.sanctionsRoot);
-        inputs[15] = uint256(newRoots.poolRulesRoot);
-
-        return inputs;
+    /// @notice Add a root hash to the historical roots circular buffer
+    /// @param rootHash Hash to add
+    function _addHistoricalRoot(bytes32 rootHash) internal {
+        historicalRoots[nextRootIndex] = rootHash;
+        nextRootIndex = (nextRootIndex + 1) % HISTORICAL_ROOTS_SIZE;
     }
 }

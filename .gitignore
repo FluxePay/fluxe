@@ -16,3 +16,4 @@ fluxe-rapidsnark/outputs/
 **/out
 **/cache
 **/target
+**/node_modules

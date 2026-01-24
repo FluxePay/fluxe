@@ -15,13 +15,17 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 use crate::error::FluxeError;
-use crate::groth16::{Groth16Verifier, FLUXE_VERIFYING_KEY, FLUXE_NR_PUBLIC_INPUTS};
+use crate::sp1::{verify_sp1_batch_proof, BatchPublicValues, FLUXE_L2_CHAIN_ID};
 use crate::state::*;
 use crate::utils::verify_merkle_proof;
 use crate::MAX_ASSET_TYPES;
 
-/// Chain ID for Solana mainnet
-pub const CHAIN_ID: u32 = 501;
+// Legacy groth16 imports kept for reference (individual proof verification)
+#[allow(unused_imports)]
+use crate::groth16::{Groth16Verifier, FLUXE_VERIFYING_KEY, FLUXE_NR_PUBLIC_INPUTS};
+
+/// Chain ID for Solana settlement (used for chain-specific operations)
+pub const SOLANA_CHAIN_ID: u32 = 501;
 
 /// Maximum priority operations per batch
 pub const MAX_PRIORITY_OPS_PER_BATCH: usize = 100;
@@ -171,7 +175,7 @@ impl BatchCommitment {
         1;    // bump
 }
 
-/// Batch proof - stores proof data for verification
+/// Batch proof - stores verified proof metadata (proof itself is not stored after verification)
 #[account]
 pub struct BatchProof {
     /// Batch ID this proof is for
@@ -180,13 +184,8 @@ pub struct BatchProof {
     /// Full state roots after batch execution
     pub state_roots: StateRoots,
 
-    /// Groth16 proof data (serialized)
-    pub proof_a: [u8; 64],  // G1 point
-    pub proof_b: [u8; 128], // G2 point
-    pub proof_c: [u8; 64],  // G1 point
-
-    /// Public inputs hash for verification
-    pub public_inputs_hash: [u8; 32],
+    /// Number of individual proofs verified in this batch
+    pub proof_count: u32,
 
     /// Timestamp when proof was submitted
     pub proved_at: i64,
@@ -201,10 +200,7 @@ pub struct BatchProof {
 impl BatchProof {
     pub const LEN: usize = 8 +   // batch_id
         StateRoots::LEN +         // state_roots
-        64 +  // proof_a
-        128 + // proof_b
-        64 +  // proof_c
-        32 +  // public_inputs_hash
+        4 +   // proof_count
         8 +   // proved_at
         32 +  // prover
         1;    // bump
@@ -539,15 +535,23 @@ pub mod fluxe_bridge_v2 {
         Ok(())
     }
 
-    /// Phase 2: Prove a batch (verifier submits proof)
+    /// Phase 2: Prove a batch (verifier submits SP1 batch proof)
+    ///
+    /// The SP1 proof aggregates multiple individual Groth16 proofs and is verified
+    /// using the sp1-solana crate. The proof and public values are passed as
+    /// instruction data and verified on-chain - they are not stored after verification.
+    ///
+    /// # Arguments
+    /// * `batch_id` - Batch ID to prove
+    /// * `state_roots` - Full state roots after batch execution
+    /// * `proof` - SP1 Groth16 proof bytes (variable length, ~260 bytes)
+    /// * `public_values` - SP1 public values (variable length, 80 bytes for FLUXE)
     pub fn prove_batch(
         ctx: Context<ProveBatch>,
         batch_id: u64,
         state_roots: StateRoots,
-        proof_a: [u8; 64],
-        proof_b: [u8; 128],
-        proof_c: [u8; 64],
-        public_inputs_hash: [u8; 32],
+        proof: Vec<u8>,
+        public_values: Vec<u8>,
     ) -> Result<()> {
         let bridge = &mut ctx.accounts.bridge;
         let commitment = &mut ctx.accounts.batch_commitment;
@@ -576,48 +580,60 @@ pub mod fluxe_bridge_v2 {
 
         require!(!bridge.paused, FluxeError::BridgePaused);
 
-        // Verify state roots hash matches commitment
-        let computed_roots_hash = compute_state_roots_hash(&state_roots);
+        // Compute state roots hashes for validation (using SHA256 to match SP1)
+        let computed_new_roots_hash = compute_state_roots_hash_sha256(&state_roots);
+
+        // Decode public values to extract batch metadata
+        let batch_values = BatchPublicValues::from_bytes(&public_values)?;
+
+        // In ZK mode, verify the SP1 batch proof
+        if bridge.verification_mode == VerificationMode::ZkProof {
+            // Verify SP1 proof using sp1-solana
+            // This verifies that the SP1 program with FLUXE_BATCH_VKEY produced these public_values
+            verify_sp1_batch_proof(&proof, &public_values)?;
+
+            msg!("SP1 batch proof verified successfully");
+        } else {
+            msg!("Optimistic mode: skipping SP1 proof verification");
+        }
+
+        // Validate public values against expected batch parameters
+        // (done after proof verification to ensure values are authentic)
+
+        // Validate FLUXE L2 chain ID
         require!(
-            computed_roots_hash == commitment.state_roots_hash,
+            batch_values.chain_id == FLUXE_L2_CHAIN_ID,
+            FluxeError::InvalidChainId
+        );
+
+        // Validate batch ID matches
+        require!(
+            batch_values.batch_id == batch_id,
+            FluxeError::InvalidBatchId
+        );
+
+        // Validate new roots hash matches computed hash from provided state_roots
+        require!(
+            batch_values.new_roots_hash == computed_new_roots_hash,
             FluxeError::StateRootsMismatch
         );
 
-        // In ZK mode, verify the Groth16 proof using groth16-solana
-        if bridge.verification_mode == VerificationMode::ZkProof {
-            // Build public inputs from state roots hash and batch metadata
-            // Format: [state_roots_hash, batch_id as 32-byte BE, tx_count as 32-byte BE]
-            let mut public_inputs: [[u8; 32]; FLUXE_NR_PUBLIC_INPUTS] = [[0u8; 32]; FLUXE_NR_PUBLIC_INPUTS];
-            public_inputs[0] = commitment.state_roots_hash;
-            public_inputs[1][24..32].copy_from_slice(&batch_id.to_be_bytes());
-            public_inputs[2][28..32].copy_from_slice(&commitment.tx_count.to_be_bytes());
+        // Validate old roots hash matches commitment (ensures continuity)
+        require!(
+            batch_values.old_roots_hash == commitment.state_roots_hash,
+            FluxeError::StateRootsMismatch
+        );
 
-            // Create verifier and verify proof
-            let mut verifier = Groth16Verifier::new(
-                &proof_a,
-                &proof_b,
-                &proof_c,
-                &public_inputs,
-                &FLUXE_VERIFYING_KEY,
-            ).map_err(|_| FluxeError::Groth16ProofInvalid)?;
-
-            verifier.verify().map_err(|_| FluxeError::Groth16ProofInvalid)?;
-
-            msg!("Groth16 proof verified successfully for batch {}", batch_id);
-        } else {
-            msg!("Optimistic mode: skipping ZK proof verification");
-        }
+        msg!("  Batch ID: {}", batch_values.batch_id);
+        msg!("  Proof count: {}", batch_values.proof_count);
 
         let clock = Clock::get()?;
 
-        // Initialize batch proof
+        // Initialize batch proof record (proof itself is not stored, only metadata)
         let batch_proof = &mut ctx.accounts.batch_proof;
         batch_proof.batch_id = batch_id;
         batch_proof.state_roots = state_roots;
-        batch_proof.proof_a = proof_a;
-        batch_proof.proof_b = proof_b;
-        batch_proof.proof_c = proof_c;
-        batch_proof.public_inputs_hash = public_inputs_hash;
+        batch_proof.proof_count = batch_values.proof_count;
         batch_proof.proved_at = clock.unix_timestamp;
         batch_proof.prover = ctx.accounts.verifier.key();
         batch_proof.bump = ctx.bumps.batch_proof;
@@ -630,7 +646,7 @@ pub mod fluxe_bridge_v2 {
 
         emit!(BatchProvedEvent {
             batch_id,
-            state_roots_hash: computed_roots_hash,
+            state_roots_hash: computed_new_roots_hash,
             prover: ctx.accounts.verifier.key(),
             timestamp: clock.unix_timestamp,
         });
@@ -1328,9 +1344,27 @@ fn compute_priority_op_hash(
     hash.0
 }
 
-/// Compute state roots hash for commitment verification
+/// Compute state roots hash for commitment verification (keccak256)
 fn compute_state_roots_hash(roots: &StateRoots) -> [u8; 32] {
     use solana_program::keccak::hashv;
+
+    let hash = hashv(&[
+        &roots.cmt_root,
+        &roots.nft_root,
+        &roots.obj_root,
+        &roots.cb_root,
+        &roots.ingress_root,
+        &roots.exit_root,
+        &roots.sanctions_root,
+        &roots.pool_rules_root,
+    ]);
+
+    hash.0
+}
+
+/// Compute state roots hash using SHA256 (for SP1 public values matching)
+fn compute_state_roots_hash_sha256(roots: &StateRoots) -> [u8; 32] {
+    use solana_program::hash::hashv;
 
     let hash = hashv(&[
         &roots.cmt_root,
@@ -1550,7 +1584,8 @@ mod tests {
 
     #[test]
     fn test_batch_proof_size() {
-        let expected_size = 8 + StateRoots::LEN + 64 + 128 + 64 + 32 + 8 + 32 + 1;
+        // batch_id(8) + state_roots + proof_count(4) + proved_at(8) + prover(32) + bump(1)
+        let expected_size = 8 + StateRoots::LEN + 4 + 8 + 32 + 1;
         assert_eq!(BatchProof::LEN, expected_size);
     }
 
